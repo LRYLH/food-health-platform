@@ -16,10 +16,12 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+.baidu_token_cache
 backend/.env
 !backend/.env.example
 docker/.env
 !docker/.env.example
+.claude
 
 # ==========================================
 # 后端与算法 (Python - Backend & Algorithm)
@@ -43,6 +45,7 @@ htmlcov/
 *.pkl
 algorithm/models/
 algorithm/data/hard_samples/
+algorithm/data/samples/
 
 # ==========================================
 # 前端 (Node.js - Frontend/Uni-app)
