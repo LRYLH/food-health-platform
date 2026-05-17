@@ -17,6 +17,8 @@ Thumbs.db
 .env.local
 .env.*.local
 .baidu_token_cache
+backend/.env
+!backend/.env.example
 docker/.env
 !docker/.env.example
 .claude
@@ -63,6 +65,8 @@ docker/pg_data/
 docker/minio_data/
 docker/milvus_data/
 docker/redis_data/
+backend/mysql-data/
+backend/redis-data/
 
 # ==========================================
 # 文档与临时资产 (Docs & Temp)
