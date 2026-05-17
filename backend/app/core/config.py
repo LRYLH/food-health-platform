@@ -35,18 +35,9 @@ class Settings(BaseSettings):
     auth_cookie_samesite: str = "lax"
     auth_cookie_domain: str | None = None
 
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_username: str = ""
-    smtp_password: str = ""
-    smtp_from_email: str = ""
-    smtp_from_name: str = "Food Health Platform"
-    smtp_use_tls: bool = True
-
-    email_code_expire_minutes: int = 10
-    email_code_length: int = 6
-    email_code_resend_interval_seconds: int = 60
-    email_code_max_verify_attempts: int = 5
+    wechat_app_id: str = ""
+    wechat_app_secret: str = ""
+    wechat_jscode2session_url: str = "https://api.weixin.qq.com/sns/jscode2session"
 
     upload_dir: Path = Path("uploads")
     cors_origins: list[str] = ["*"]

@@ -1,7 +1,4 @@
 from datetime import UTC, datetime, timedelta
-import hashlib
-import hmac
-import secrets
 from typing import Any
 from uuid import uuid4
 
@@ -14,42 +11,6 @@ from ..models.user import User
 from .config import settings
 from .database import get_db
 from .redis_client import get_redis
-
-
-PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
-PASSWORD_HASH_ITERATIONS = 260000
-
-
-def hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode("utf-8"),
-        salt.encode("utf-8"),
-        PASSWORD_HASH_ITERATIONS,
-    ).hex()
-    return (
-        f"{PASSWORD_HASH_ALGORITHM}"
-        f"${PASSWORD_HASH_ITERATIONS}"
-        f"${salt}"
-        f"${digest}"
-    )
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    try:
-        algorithm, iterations, salt, expected_digest = hashed_password.split("$", 3)
-        if algorithm != PASSWORD_HASH_ALGORITHM:
-            return False
-        actual_digest = hashlib.pbkdf2_hmac(
-            "sha256",
-            plain_password.encode("utf-8"),
-            salt.encode("utf-8"),
-            int(iterations),
-        ).hex()
-    except (AttributeError, TypeError, ValueError):
-        return False
-    return hmac.compare_digest(actual_digest, expected_digest)
 
 
 def create_token(

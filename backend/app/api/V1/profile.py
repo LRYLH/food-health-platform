@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Body, Depends, Query, Response, status
+from fastapi import APIRouter, Body, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from ...core.database import get_db
@@ -129,10 +129,10 @@ def update_profile(
     return upsert_profile(db, current_user, profile_payload)
 
 
-@router.delete("", status_code=204)
+@router.delete("")
 def remove_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> Response:
+) -> dict[str, str]:
     delete_profile(db, current_user)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return {"message": "Profile deleted"}

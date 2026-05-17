@@ -23,7 +23,8 @@ Set these values in `backend/.env` or your shell if they differ from defaults:
 Copy-Item .env.example .env
 ```
 
-Then edit `.env` and fill in `MYSQL_PASSWORD`, `SECRET_KEY`, and SMTP values.
+Then edit `.env` and fill in `MYSQL_PASSWORD`, `SECRET_KEY`,
+`WECHAT_APP_ID`, and `WECHAT_APP_SECRET`.
 Do not commit `.env`.
 
 API docs:
@@ -33,12 +34,9 @@ API docs:
 
 ## Main APIs
 
-- `POST /api/v1/auth/email-code` with `email` in JSON body or query string
-- `POST /api/v1/auth/register` with `email`, `username`, `password`, `verification_code` in JSON body or query string
-- `POST /api/v1/auth/login` with `email`, `password` in JSON body or query string; sets HttpOnly auth cookies
+- `POST /api/v1/auth/wechat-login` with `code` from `wx.login`; sets HttpOnly auth cookies
 - `POST /api/v1/auth/refresh`; reads refresh token from HttpOnly cookie and resets auth cookies
 - `POST /api/v1/auth/logout`; reads tokens from HttpOnly cookies, revokes them, and clears cookies
-- `POST /api/v1/auth/wechat-login`
 - `GET /api/v1/auth/me`
 - `GET /api/v1/profile`
 - `POST /api/v1/profile` with JSON body or query string
@@ -56,3 +54,16 @@ algorithm gRPC service when those services are ready.
 
 Auth tokens are not returned in response bodies. Frontend requests must include
 cookies, for example `fetch(url, { credentials: "include" })`.
+
+All API JSON responses use the same envelope:
+
+```json
+{
+  "code": "0",
+  "msg": "success",
+  "data": {},
+  "timestamp": "2026-05-15T00:00:00+00:00"
+}
+```
+
+Auth cookies are still delivered through `Set-Cookie` response headers.
