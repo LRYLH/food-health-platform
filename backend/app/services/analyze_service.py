@@ -64,22 +64,47 @@ def _task_paths(task_id: str, suffix: str = ".bin") -> dict[str, Path]:
 def _metadata(task: ScanHistory) -> dict[str, Any]:
     raw_result = task.raw_result if isinstance(task.raw_result, dict) else {}
     meta = raw_result.get("meta")
-    return meta if isinstance(meta, dict) else {}
+    if isinstance(meta, dict):
+        return meta
+    vision = raw_result.get("vision")
+    if isinstance(vision, dict):
+        vision_meta = vision.get("meta")
+        if isinstance(vision_meta, dict):
+            return vision_meta
+    return {}
 
 
-def extract_ingredients(vision_result: dict[str, Any]) -> list[str]:
-    ingredients = vision_result.get("ingredients", {})
+def _profile_payload(profile: HealthProfile | None) -> dict[str, list[str]]:
+    if profile is None:
+        return {"allergens": [], "chronic_diseases": []}
+    return {
+        "allergens": profile.allergies or [],
+        "chronic_diseases": profile.chronic_diseases or [],
+    }
+
+
+def _vision_payload(rag_input: dict[str, Any]) -> dict[str, Any]:
+    vision = rag_input.get("vision")
+    if isinstance(vision, dict):
+        return vision
+    return rag_input
+
+
+def extract_ingredients(payload: dict[str, Any]) -> list[str]:
+    vision = _vision_payload(payload)
+    ingredients = vision.get("ingredients", {})
     if isinstance(ingredients, dict):
         ingredients = ingredients.get("items", [])
     return [item.strip() for item in _flatten(ingredients) if item.strip()]
 
 
-def extract_food_name(vision_result: dict[str, Any]) -> str | None:
+def extract_food_name(payload: dict[str, Any]) -> str | None:
+    vision = _vision_payload(payload)
     for key in ("food_name", "product_name", "name"):
-        value = vision_result.get(key)
+        value = vision.get(key)
         if value:
             return str(value)
-    meta = vision_result.get("meta")
+    meta = vision.get("meta")
     if isinstance(meta, dict) and meta.get("food_name"):
         return str(meta["food_name"])
     return None
@@ -98,15 +123,15 @@ def _profile_has(values: list[str], keywords: set[str]) -> bool:
     return bool(normalized & keywords)
 
 
-def _risk_from_text(text: str, allergies: list[str], diseases: list[str]) -> tuple[RiskLevel, list[str]]:
+def _risk_from_text(text: str, user_profile: dict[str, list[str]]) -> tuple[RiskLevel, list[str]]:
     normalized = text.lower()
     warnings: list[str] = []
 
-    for allergen in allergies:
+    for allergen in user_profile["allergens"]:
         if allergen and allergen.lower() in normalized:
             warnings.append(f"检测到可能的过敏原：{allergen}")
 
-    disease_values = [disease.lower() for disease in diseases if disease]
+    disease_values = [disease.lower() for disease in user_profile["chronic_diseases"] if disease]
     if _profile_has(disease_values, {"diabetes", "糖尿病", "2型糖尿病"}):
         if any(keyword.lower() in normalized for keyword in SUGAR_KEYWORDS):
             warnings.append("该食品可能含糖，糖尿病用户需关注摄入量。")
@@ -149,10 +174,7 @@ def load_rag_output(task: ScanHistory) -> dict[str, Any]:
 
 
 def build_task_result_payload(task: ScanHistory) -> dict[str, Any]:
-    rag_result = load_rag_output(task)
-    if rag_result:
-        return rag_result
-    return {"answer": "", "reference": []}
+    return load_rag_output(task) or {"answer": "", "reference": []}
 
 
 async def save_upload_file(file: UploadFile, user_id: int) -> str:
@@ -200,38 +222,49 @@ def create_scan_task(
     return task
 
 
-def _run_vision(task: ScanHistory) -> str | None:
-    meta = _metadata(task)
+def _run_vision(task: ScanHistory) -> tuple[dict[str, Any], str | None]:
     try:
-        vision_result = analyze_food_image(task.image_path or "")
-        error = None
+        return analyze_food_image(task.image_path or ""), None
     except AlgorithmUnavailable as exc:
-        vision_result = {
+        return {
             "ingredients": {"items": []},
             "nutrition_facts": {},
             "expiration_date": {},
-        }
-        error = str(exc)
-        meta["algorithm_error"] = error
+        }, str(exc)
 
-    vision_result["meta"] = {
-        **(vision_result.get("meta") if isinstance(vision_result.get("meta"), dict) else {}),
-        **meta,
+
+def _build_rag_input(
+    *,
+    task: ScanHistory,
+    vision_result: dict[str, Any],
+    user_profile: dict[str, list[str]],
+    algorithm_error: str | None,
+) -> dict[str, Any]:
+    meta = _metadata(task)
+    vision_meta = vision_result.get("meta") if isinstance(vision_result.get("meta"), dict) else {}
+    return {
+        "task_id": task.task_id,
+        "vision": {
+            **vision_result,
+            "meta": {
+                **vision_meta,
+                **meta,
+                **({"algorithm_error": algorithm_error} if algorithm_error else {}),
+            },
+        },
+        "user_profile": user_profile,
+        "voice_query": task.question,
     }
-    _write_json(Path(meta["vision_output_path"]), vision_result)
-    task.raw_result = vision_result
-    return error
 
 
 def _fallback_rag_payload(
     *,
-    task: ScanHistory,
-    vision_result: dict[str, Any],
+    rag_input: dict[str, Any],
     risk_level: RiskLevel,
     warnings: list[str],
 ) -> dict[str, Any]:
-    food_name = extract_food_name(vision_result) or "该食品"
-    ingredients = extract_ingredients(vision_result)
+    food_name = extract_food_name(rag_input) or "该食品"
+    ingredients = extract_ingredients(rag_input)
     ingredients_text = "、".join(ingredients) if ingredients else "暂未识别到明确配料"
     warning_text = " ".join(warnings) if warnings else _risk_suggestion(risk_level)
     answer = (
@@ -240,32 +273,8 @@ def _fallback_rag_payload(
     )
     return {
         "answer": answer,
-        "reference": [
-            "vision_output",
-            *warnings,
-        ],
+        "reference": ["vision_output", *warnings],
     }
-
-
-def _run_rag(
-    *,
-    task: ScanHistory,
-    vision_result: dict[str, Any],
-    risk_level: RiskLevel,
-    warnings: list[str],
-) -> dict[str, Any]:
-    meta = _metadata(task)
-    # The RAG owner contract is a JSON object with answer and reference.
-    # Until the concrete RAG callable is provided, the backend writes the same
-    # shape so the frontend contract remains stable.
-    payload = _fallback_rag_payload(
-        task=task,
-        vision_result=vision_result,
-        risk_level=risk_level,
-        warnings=warnings,
-    )
-    _write_json(Path(meta["rag_output_path"]), payload)
-    return payload
 
 
 def run_development_analysis(task_id: str) -> None:
@@ -280,33 +289,37 @@ def run_development_analysis(task_id: str) -> None:
         task.error_message = None
         db.commit()
 
-        algorithm_error = _run_vision(task)
-        vision_result = load_vision_output(task)
-
         profile = db.scalar(select(HealthProfile).where(HealthProfile.user_id == task.user_id))
-        allergies = profile.allergies if profile else []
-        diseases = profile.chronic_diseases if profile else []
-
-        risk_level, warnings = _risk_from_text(
-            " ".join([task.question or "", *_flatten(vision_result)]),
-            allergies,
-            diseases,
-        )
-        _run_rag(
+        user_profile = _profile_payload(profile)
+        vision_result, algorithm_error = _run_vision(task)
+        rag_input = _build_rag_input(
             task=task,
             vision_result=vision_result,
+            user_profile=user_profile,
+            algorithm_error=algorithm_error,
+        )
+        _write_json(Path(_metadata(task)["vision_output_path"]), rag_input)
+        task.raw_result = rag_input
+
+        risk_level, warnings = _risk_from_text(
+            " ".join([task.question or "", *_flatten(rag_input)]),
+            user_profile,
+        )
+        rag_output = _fallback_rag_payload(
+            rag_input=rag_input,
             risk_level=risk_level,
             warnings=warnings,
         )
+        _write_json(Path(_metadata(task)["rag_output_path"]), rag_output)
 
         task.status = ScanStatus.completed
         task.risk_level = risk_level
         task.warnings = warnings
         task.suggestions = [_risk_suggestion(risk_level)]
-        task.summary = build_task_result_payload(task)["answer"]
+        task.summary = rag_output["answer"]
         task.extracted_text = {
-            "food_name": extract_food_name(vision_result),
-            "ingredients": extract_ingredients(vision_result),
+            "food_name": extract_food_name(rag_input),
+            "ingredients": extract_ingredients(rag_input),
         }
         task.error_message = algorithm_error
         db.commit()
