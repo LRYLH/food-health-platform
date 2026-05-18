@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["*"]
     algorithm_enabled: bool = True
     algorithm_module_dir: Path | None = None
+    rag_service_url: str = "http://127.0.0.1:8001/api/ask"
+    rag_service_timeout_seconds: int = 120
 
     @property
     def vision_input_dir(self) -> Path:

@@ -32,12 +32,15 @@ services:
             - "8000:8000"
         environment:
             - MILVUS_URI=http://milvus:19530
+            - RAG_SERVICE_URL=http://algo_service:8001/api/ask
         env_file:
             - .env
         depends_on:
             mysql:
                 condition: service_healthy
             redis:
+                condition: service_started
+            algo_service:
                 condition: service_started
         volumes:
             - ./app:/app/app
@@ -53,6 +56,8 @@ services:
             - "8001:8001"
         environment:
             - MILVUS_URI=http://milvus:19530
+            - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+            - LLAMA_CLOUD_API_KEY=${LLAMA_CLOUD_API_KEY}
         env_file:
             - .env
         depends_on:
