@@ -11,9 +11,11 @@ from dotenv import load_dotenv
 from llama_index.core import VectorStoreIndex, Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.milvus import MilvusVectorStore
-from llama_index.llms.dashscope import DashScope, DashScopeGenerationModels
+from dashscope import Generation
+from http import HTTPStatus
 
 load_dotenv()
+QWEN_MAX_MODEL = "qwen-max"
 
 
 
@@ -30,10 +32,6 @@ async def lifespan(app: FastAPI):
 
 
         Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-zh-v1.5")
-        Settings.llm = DashScope(
-            model_name=DashScopeGenerationModels.QWEN_MAX,
-            api_key=os.getenv("DASHSCOPE_API_KEY", "missing_key") 
-        )
 
 
 
@@ -151,8 +149,14 @@ async def ask_question(trigger: TaskTriggerRequest):
   "suggestions": ["建议一", "建议二"]
 }}
 """
-        response = Settings.llm.complete(final_prompt)
-        raw_text = str(response).strip()
+        llm_response = Generation.call(
+            model=QWEN_MAX_MODEL,
+            prompt=final_prompt,
+            api_key=os.getenv("DASHSCOPE_API_KEY"),
+        )
+        if llm_response.status_code != HTTPStatus.OK:
+            raise ValueError(f"通义千问 API 调用失败: code={llm_response.code} message={llm_response.message}")
+        raw_text = llm_response.output.text.strip()
 
         match = re.search(r'\{.*\}', raw_text, re.DOTALL)
         if not match:
