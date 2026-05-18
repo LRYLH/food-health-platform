@@ -7,7 +7,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "Food Health Platform API"
-    api_v1_prefix: str = "/api/v1"
     environment: str = "development"
     debug: bool = True
 
@@ -27,13 +26,7 @@ class Settings(BaseSettings):
         description="JWT signing key. Override in production.",
     )
     access_token_expire_minutes: int = 30
-    refresh_token_expire_minutes: int = 60 * 24 * 14
     jwt_algorithm: str = "HS256"
-    access_token_cookie_name: str = "access_token"
-    refresh_token_cookie_name: str = "refresh_token"
-    auth_cookie_secure: bool = False
-    auth_cookie_samesite: str = "lax"
-    auth_cookie_domain: str | None = None
 
     wechat_app_id: str = ""
     wechat_app_secret: str = ""
@@ -41,8 +34,8 @@ class Settings(BaseSettings):
 
     upload_dir: Path = Path("uploads")
     model_io_dir: Path = Path("model_io")
+    knowledge_upload_dir: Path = Path("knowledge_uploads")
     cors_origins: list[str] = ["*"]
-    response_envelope_enabled: bool = False
     algorithm_enabled: bool = True
     algorithm_module_dir: Path | None = None
 

@@ -1,24 +1,16 @@
 # Backend
 
-FastAPI backend for the food health platform. The public API follows
-`../大创接口.md` and is mounted at root-level paths.
+FastAPI backend for the food health platform. Public routes are mounted at the
+root paths defined in `../大创接口.md`.
 
 ## Requirements
 
-- Python 3.11
+- Python 3.11+
 - MySQL
 - Redis
-- Algorithm dependencies when full image OCR and vision analysis are required
+- Vision and RAG dependencies when running the full model pipeline
 
-Docs:
-
-- `http://127.0.0.1:8000/docs`
-- `http://127.0.0.1:8000/health`
-
-## Authentication
-
-Login returns a JWT access token and also sets auth cookies for clients that
-prefer cookie-based requests.
+## Auth
 
 ```http
 POST /auth/wechat-login
@@ -40,21 +32,17 @@ Response:
 }
 ```
 
-Authenticated requests should send:
+Use the returned token on protected endpoints:
 
 ```http
 Authorization: Bearer <access_token>
 ```
 
-## Main APIs
-
-### Health Profile
+## User APIs
 
 ```http
 GET /users/me/profile
 ```
-
-Response:
 
 ```json
 {
@@ -75,9 +63,27 @@ Content-Type: application/json
 }
 ```
 
-Successful response is `null`.
+Successful response: `null`.
 
-### Analyze Task
+```http
+GET /users/me/history?page=1&size=10
+```
+
+```json
+{
+  "total": 1,
+  "records": [
+    {
+      "task_id": "uuid",
+      "food_name": "product name",
+      "risk_level": "LOW",
+      "created_at": "2026-05-17T10:00:00Z"
+    }
+  ]
+}
+```
+
+## Task APIs
 
 ```http
 POST /tasks/analyze
@@ -86,8 +92,8 @@ Content-Type: multipart/form-data
 
 Fields:
 
-- `image`: required food package image file
-- `voice_query`: optional text converted from the user's voice query
+- `image`: required food package image
+- `voice_query`: optional user question text
 
 Response:
 
@@ -110,62 +116,69 @@ Processing response:
 }
 ```
 
-Completed response:
+Completed response. The `result` object is the RAG contract:
 
 ```json
 {
   "status": "completed",
   "result": {
-    "food_name": "product name",
-    "ingredients": ["wheat flour", "sugar"],
-    "risk_level": "HIGH",
-    "health_advice": "advice text",
-    "tts_audio_url": null
+    "answer": "RAG generated answer",
+    "reference": ["source chunk 1", "source chunk 2"]
   }
 }
 ```
 
-`risk_level` values are `LOW`, `MEDIUM`, and `HIGH`.
-
-### History
+## Admin Knowledge APIs
 
 ```http
-GET /users/me/history?page=1&size=10
+POST /admin/knowledge/upload
+Content-Type: multipart/form-data
+```
+
+Field:
+
+- `file`: PDF, Markdown, or another knowledge document
+
+Response:
+
+```json
+{
+  "document_id": "uuid",
+  "parsed_chunks_count": 142
+}
+```
+
+```http
+POST /admin/knowledge/sync-vectors
+Content-Type: application/json
+```
+
+```json
+{
+  "document_id": "uuid"
+}
 ```
 
 Response:
 
 ```json
 {
-  "total": 128,
-  "records": [
-    {
-      "task_id": "uuid",
-      "food_name": "product name",
-      "risk_level": "LOW",
-      "created_at": "2026-05-17T10:00:00Z"
-    }
-  ]
+  "status": "syncing",
+  "message": "后台已开始向量化入库"
 }
 ```
 
-## Algorithm Integration
+## Model IO
 
-`POST /tasks/analyze` calls the local algorithm module through
-`backend/app/algorithm/vision_engine/pipeline.py` by default.
+The backend keeps model handoff files under `MODEL_IO_DIR`:
 
-Model file flow:
+- `model_io/vision_input/{task_id}.*`: image consumed by the vision model
+- `model_io/vision_output/{task_id}.json`: raw vision model JSON
+- `model_io/rag_output/{task_id}.json`: final RAG JSON with `answer` and `reference`
 
-- `backend/model_io/vision_input/{task_id}.*`: image file consumed by the vision model
-- `backend/model_io/vision_output/{task_id}.json`: raw vision model JSON output
-- `backend/model_io/rag_output/{task_id}.json`: final RAG-stage JSON returned by task status APIs
+Environment variables:
 
-Relevant environment variables:
-
-- `ALGORITHM_ENABLED=false`: disables algorithm execution and uses local rule fallback
-- `ALGORITHM_MODULE_DIR=/path/to/algorithm`: overrides the default algorithm path
-- `MODEL_IO_DIR=model_io`: controls where the three model IO folders live
-- `RESPONSE_ENVELOPE_ENABLED=false`: keeps responses in the raw format required by `大创接口.md`
-
-When the algorithm dependencies are unavailable, tasks still complete with the
-local rule-based fallback and record the algorithm error in the task metadata.
+- `MODEL_IO_DIR=model_io`
+- `KNOWLEDGE_UPLOAD_DIR=knowledge_uploads`
+- `ALGORITHM_ENABLED=true`
+- `ALGORITHM_MODULE_DIR=`

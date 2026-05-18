@@ -8,9 +8,8 @@ from ...models.health_profile import HealthProfile
 from ...models.scan_history import ScanHistory
 from ...models.user import User
 from ...schemas.analyze import HistoryRecord, HistoryResponse
-from ...schemas.profile import HealthProfileCreate, UserProfilePayload, UserProfileResponse
-from ...services.analyze_service import build_task_result_payload, risk_level_code
-from ...services.profile_service import upsert_profile
+from ...schemas.profile import UserProfilePayload, UserProfileResponse
+from ...services.analyze_service import extract_food_name, load_vision_output, risk_level_code
 
 
 router = APIRouter(prefix="/users/me", tags=["users"])
@@ -36,14 +35,13 @@ def replace_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> None:
-    upsert_profile(
-        db,
-        current_user,
-        HealthProfileCreate(
-            allergies=payload.allergens,
-            chronic_diseases=payload.chronic_diseases,
-        ),
-    )
+    profile = db.scalar(select(HealthProfile).where(HealthProfile.user_id == current_user.id))
+    if profile is None:
+        profile = HealthProfile(user_id=current_user.id)
+        db.add(profile)
+    profile.allergies = payload.allergens
+    profile.chronic_diseases = payload.chronic_diseases
+    db.commit()
     return None
 
 
@@ -68,12 +66,12 @@ def read_history(
     )
     records = []
     for task in db.scalars(statement).all():
-        result = build_task_result_payload(task)
+        vision_result = load_vision_output(task) or (task.raw_result or {})
         records.append(
             HistoryRecord(
                 task_id=task.task_id,
-                food_name=result.get("food_name"),
-                risk_level=result.get("risk_level", risk_level_code(task.risk_level)),
+                food_name=extract_food_name(vision_result),
+                risk_level=risk_level_code(task.risk_level),
                 created_at=task.created_at,
             )
         )

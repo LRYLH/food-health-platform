@@ -6,7 +6,7 @@ from ...core.database import get_db
 from ...core.security import get_current_user
 from ...models.scan_history import ScanHistory, ScanStatus
 from ...models.user import User
-from ...schemas.analyze import TaskResultPayload, TaskStatusResponse, TaskSubmitResponse
+from ...schemas.analyze import RagResultPayload, TaskStatusResponse, TaskSubmitResponse
 from ...services.analyze_service import (
     build_task_result_payload,
     create_scan_task,
@@ -69,11 +69,8 @@ def read_task_status(
     result = build_task_result_payload(task)
     return TaskStatusResponse(
         status=task.status,
-        result=TaskResultPayload(
-            food_name=result.get("food_name"),
-            ingredients=result.get("ingredients", []),
-            risk_level=result.get("risk_level", "LOW"),
-            health_advice=result.get("health_advice", ""),
-            tts_audio_url=result.get("tts_audio_url"),
+        result=RagResultPayload(
+            answer=result["answer"],
+            reference=result["reference"],
         ),
     )

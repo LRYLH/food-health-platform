@@ -6,13 +6,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .api.V1 import analyze, auth, profile
+from .api.V1 import admin, analyze, auth, profile
 from .core.config import settings
 from .core.database import init_db
-from .core.response import (
-    UnifiedResponseMiddleware,
-    validation_error_response,
-)
+from .core.response import validation_error_response
 
 
 @asynccontextmanager
@@ -22,6 +19,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     settings.vision_input_dir.mkdir(parents=True, exist_ok=True)
     settings.vision_output_dir.mkdir(parents=True, exist_ok=True)
     settings.rag_output_dir.mkdir(parents=True, exist_ok=True)
+    settings.knowledge_upload_dir.mkdir(parents=True, exist_ok=True)
     yield
 
 
@@ -39,9 +37,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(UnifiedResponseMiddleware)
-
-
 @app.exception_handler(HTTPException)
 async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
     return JSONResponse(
@@ -56,6 +51,7 @@ app.add_exception_handler(RequestValidationError, validation_error_response)
 app.include_router(auth.router)
 app.include_router(profile.router)
 app.include_router(analyze.router)
+app.include_router(admin.router)
 
 
 @app.get("/health", tags=["system"])

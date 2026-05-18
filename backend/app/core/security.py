@@ -42,20 +42,8 @@ def create_access_token(subject: str) -> tuple[str, str]:
     )
 
 
-def create_refresh_token(subject: str) -> tuple[str, str]:
-    return create_token(
-        subject=subject,
-        token_type="refresh",
-        expires_delta=timedelta(minutes=settings.refresh_token_expire_minutes),
-    )
-
-
 def access_token_key(user_id: int | str, jti: str) -> str:
     return f"auth:access:{user_id}:{jti}"
-
-
-def refresh_token_key(user_id: int | str, jti: str) -> str:
-    return f"auth:refresh:{user_id}:{jti}"
 
 
 def decode_token(token: str, expected_type: str) -> dict[str, Any]:
@@ -85,11 +73,7 @@ def get_current_user(
     )
     authorization = request.headers.get("Authorization", "")
     scheme, _, bearer_token = authorization.partition(" ")
-    access_token = (
-        bearer_token.strip()
-        if scheme.lower() == "bearer" and bearer_token.strip()
-        else request.cookies.get(settings.access_token_cookie_name)
-    )
+    access_token = bearer_token.strip() if scheme.lower() == "bearer" else ""
     if not access_token:
         raise auth_error
 
