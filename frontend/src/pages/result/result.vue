@@ -16,30 +16,33 @@
     </view>
 
     <template v-else-if="status === 'completed' && result">
-      <view class="hero-card" :class="riskClass(result.risk_level)">
-        <text class="risk-tag">{{ riskLabel(result.risk_level) }}</text>
-        <text class="food-name">{{ result.food_name }}</text>
-      </view>
-
-      <view class="section">
-        <text class="section-title">配料表</text>
-        <view class="chip-list">
-          <view v-for="(ing, i) in result.ingredients" :key="i" class="chip">
-            <text>{{ ing }}</text>
-          </view>
+      <view class="answer-card">
+        <view class="answer-header">
+          <text class="answer-badge">分析建议</text>
+        </view>
+        <view class="answer-body">
+          <text
+            v-for="(line, i) in answerParagraphs"
+            :key="`p-${i}`"
+            class="answer-paragraph"
+          >
+            {{ line }}
+          </text>
         </view>
       </view>
 
-      <view class="section">
-        <text class="section-title">健康建议</text>
-        <view class="advice-card">
-          <text class="advice-text">{{ result.health_advice }}</text>
+      <view v-if="result.reference.length > 0" class="reference-section">
+        <view class="section-title-row">
+          <text class="section-title">参考来源</text>
+          <text class="section-count">{{ result.reference.length }} 条</text>
         </view>
-      </view>
-
-      <view v-if="result.tts_audio_url" class="section">
-        <view class="tts-btn" @tap="playTts">
-          <text>{{ playing ? '⏸ 停止语音播报' : '▶ 语音播报建议' }}</text>
+        <view
+          v-for="(ref, i) in result.reference"
+          :key="`ref-${i}`"
+          class="reference-card"
+        >
+          <text class="reference-index">[{{ i + 1 }}]</text>
+          <text class="reference-text">{{ ref }}</text>
         </view>
       </view>
 
@@ -57,25 +60,20 @@
 
 <script setup lang="ts">
 import { onLoad } from '@dcloudio/uni-app'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { pollUntilDone } from '@/api/tasks'
-import type { AnalysisResult, RiskLevel } from '@/types/api'
+import type { AnalysisResult } from '@/types/api'
 
 type Status = 'loading' | 'completed' | 'failed'
 
 const status = ref<Status>('loading')
 const result = ref<AnalysisResult | null>(null)
 const errorMsg = ref('')
-const playing = ref(false)
-let audioCtx: UniApp.InnerAudioContext | null = null
 
-function riskLabel(level: RiskLevel): string {
-  return { LOW: '低风险', MEDIUM: '中等风险', HIGH: '高风险' }[level]
-}
-
-function riskClass(level: RiskLevel): string {
-  return `risk-${level.toLowerCase()}`
-}
+const answerParagraphs = computed(() => {
+  if (!result.value) return []
+  return result.value.answer.split(/\n+/).filter((s) => s.trim().length > 0)
+})
 
 async function loadResult(taskId: string) {
   status.value = 'loading'
@@ -92,26 +90,6 @@ async function loadResult(taskId: string) {
     errorMsg.value = e instanceof Error ? e.message : '未知错误'
     status.value = 'failed'
   }
-}
-
-function playTts() {
-  if (!result.value?.tts_audio_url) return
-  if (playing.value && audioCtx) {
-    audioCtx.stop()
-    playing.value = false
-    return
-  }
-  audioCtx = uni.createInnerAudioContext()
-  audioCtx.src = result.value.tts_audio_url
-  audioCtx.onEnded(() => {
-    playing.value = false
-  })
-  audioCtx.onError((err) => {
-    playing.value = false
-    uni.showToast({ title: '播放失败：' + (err.errMsg ?? '未知'), icon: 'none' })
-  })
-  audioCtx.play()
-  playing.value = true
 }
 
 function goBack() {
@@ -197,6 +175,8 @@ onLoad((options) => {
   color: #888;
   margin-bottom: 48rpx;
   text-align: center;
+  padding: 0 40rpx;
+  line-height: 1.6;
 }
 
 .retry-btn {
@@ -207,87 +187,91 @@ onLoad((options) => {
   font-size: 28rpx;
 }
 
-.hero-card {
-  border-radius: 32rpx;
-  padding: 60rpx 40rpx;
-  color: #fff;
+.answer-card {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 36rpx;
   margin-bottom: 32rpx;
-  display: flex;
-  flex-direction: column;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.04);
 }
 
-.hero-card.risk-low {
-  background: linear-gradient(135deg, #66bb6a, #2e7d32);
-}
-
-.hero-card.risk-medium {
-  background: linear-gradient(135deg, #ffa726, #ef6c00);
-}
-
-.hero-card.risk-high {
-  background: linear-gradient(135deg, #ef5350, #c62828);
-}
-
-.risk-tag {
-  align-self: flex-start;
-  background: rgba(255, 255, 255, 0.25);
-  padding: 8rpx 24rpx;
-  border-radius: 999rpx;
-  font-size: 24rpx;
+.answer-header {
   margin-bottom: 24rpx;
 }
 
-.food-name {
-  font-size: 44rpx;
-  font-weight: 600;
+.answer-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #4caf50, #2e7d32);
+  color: #fff;
+  font-size: 24rpx;
+  padding: 8rpx 24rpx;
+  border-radius: 999rpx;
+  font-weight: 500;
 }
 
-.section {
+.answer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.answer-paragraph {
+  font-size: 30rpx;
+  color: #1a1a1a;
+  line-height: 1.7;
+}
+
+.reference-section {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 32rpx;
   margin-bottom: 32rpx;
+}
+
+.section-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 24rpx;
 }
 
 .section-title {
   font-size: 28rpx;
-  color: #666;
-  margin-bottom: 16rpx;
-  display: block;
+  font-weight: 600;
+  color: #1a1a1a;
 }
 
-.chip-list {
+.section-count {
+  font-size: 22rpx;
+  color: #999;
+}
+
+.reference-card {
   display: flex;
-  flex-wrap: wrap;
-  gap: 16rpx;
+  align-items: flex-start;
+  gap: 12rpx;
+  padding: 20rpx 0;
+  border-top: 1rpx solid #f0f0f0;
 }
 
-.chip {
-  padding: 12rpx 24rpx;
-  background: #fff;
-  border-radius: 999rpx;
+.reference-card:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.reference-index {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: #4caf50;
+  font-weight: 600;
+  width: 48rpx;
+}
+
+.reference-text {
+  flex: 1;
   font-size: 26rpx;
-  color: #444;
-  border: 1rpx solid #e5e5e5;
-}
-
-.advice-card {
-  background: #fff;
-  border-radius: 24rpx;
-  padding: 32rpx;
-}
-
-.advice-text {
-  font-size: 28rpx;
-  color: #333;
-  line-height: 1.7;
-}
-
-.tts-btn {
-  background: #fff;
-  border: 2rpx solid #4caf50;
-  color: #2e7d32;
-  border-radius: 999rpx;
-  padding: 24rpx;
-  text-align: center;
-  font-size: 28rpx;
+  color: #555;
+  line-height: 1.6;
 }
 
 .footer-actions {

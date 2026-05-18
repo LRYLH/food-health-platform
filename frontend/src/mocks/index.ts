@@ -45,12 +45,13 @@ const profile: HealthProfile = {
 const taskSubmittedAt = new Map<string, number>()
 
 const sampleResult: AnalysisResult = {
-  food_name: '某品牌夹心饼干',
-  ingredients: ['小麦粉', '白砂糖', '代可可脂', '棕榈油', '食用盐'],
-  risk_level: 'HIGH',
-  health_advice:
-    '该食品含糖量极高且含有代可可脂，违反《糖尿病医学营养治疗指南》，建议避免食用。',
-  tts_audio_url: 'https://oss-bucket.example.com/audio/sample.mp3',
+  answer:
+    '根据您上传的食品图片和健康档案分析：该食品含糖量极高（每 100g 含碳水化合物 65g），同时含有代可可脂这一反式脂肪酸来源。\n\n结合您的 2 型糖尿病史，建议避免食用此类高糖、高反式脂肪食品。日常可选择无糖燕麦、原味坚果等替代零食。',
+  reference: [
+    '《中国 2 型糖尿病防治指南（2020 年版）》第 7 章：糖尿病患者每日添加糖摄入应低于 25g，反式脂肪酸应控制在每日总能量的 1% 以下。',
+    'GB 28050-2011 预包装食品营养标签通则：含反式脂肪酸的食品需在配料表中明确标示。',
+    '《中国居民膳食指南（2022）》：糖尿病患者应优先选择全谷物、低 GI 食物，避免精制糖与代可可脂制品。',
+  ],
 }
 
 const historyRecords = [

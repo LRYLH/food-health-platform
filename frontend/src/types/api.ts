@@ -15,11 +15,8 @@ export interface HealthProfile {
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH'
 
 export interface AnalysisResult {
-  food_name: string
-  ingredients: string[]
-  risk_level: RiskLevel
-  health_advice: string
-  tts_audio_url: string
+  answer: string
+  reference: string[]
 }
 
 export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed'
