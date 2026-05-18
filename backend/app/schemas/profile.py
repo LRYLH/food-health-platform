@@ -41,3 +41,11 @@ class HealthProfileResponse(HealthProfileBase):
 
     model_config = {"from_attributes": True}
 
+
+class UserProfilePayload(BaseModel):
+    allergens: list[str] = Field(default_factory=list)
+    chronic_diseases: list[str] = Field(default_factory=list)
+
+
+class UserProfileResponse(UserProfilePayload):
+    pass

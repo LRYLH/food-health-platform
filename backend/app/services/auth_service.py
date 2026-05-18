@@ -25,6 +25,7 @@ class IssuedTokens:
     access_expires_in_seconds: int
     refresh_expires_in_seconds: int
     user: User
+    is_new_user: bool = False
 
 
 def token_response(tokens: IssuedTokens) -> AuthSessionResponse:
@@ -36,7 +37,7 @@ def token_response(tokens: IssuedTokens) -> AuthSessionResponse:
     )
 
 
-def _issue_and_store_tokens(redis: Redis, user: User) -> IssuedTokens:
+def _issue_and_store_tokens(redis: Redis, user: User, *, is_new_user: bool = False) -> IssuedTokens:
     access_token, access_jti = create_access_token(str(user.id))
     refresh_token, refresh_jti = create_refresh_token(str(user.id))
     access_expires = settings.access_token_expire_minutes * 60
@@ -57,6 +58,7 @@ def _issue_and_store_tokens(redis: Redis, user: User) -> IssuedTokens:
         access_expires_in_seconds=access_expires,
         refresh_expires_in_seconds=refresh_expires,
         user=user,
+        is_new_user=is_new_user,
     )
 
 
@@ -85,6 +87,7 @@ def login_with_wechat_code(
     openid = session["openid"]
 
     user = db.scalar(select(User).where(User.openid == openid))
+    is_new_user = user is None
     if user is None:
         user = User(
             email=None,
@@ -98,7 +101,7 @@ def login_with_wechat_code(
 
     db.commit()
     db.refresh(user)
-    return _issue_and_store_tokens(redis, user)
+    return _issue_and_store_tokens(redis, user, is_new_user=is_new_user)
 
 
 def refresh_user_tokens(

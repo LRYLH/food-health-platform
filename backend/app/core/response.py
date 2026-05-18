@@ -49,6 +49,9 @@ class UnifiedResponseMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: RequestResponseEndpoint,
     ) -> Response:
+        if not settings_compatible_response_wrap_enabled():
+            return await call_next(request)
+
         response = await call_next(request)
         if request.url.path in SKIP_RESPONSE_WRAP_PATHS:
             return response
@@ -83,10 +86,22 @@ class UnifiedResponseMiddleware(BaseHTTPMiddleware):
         )
 
 
+def settings_compatible_response_wrap_enabled() -> bool:
+    from .config import settings
+
+    return settings.response_envelope_enabled
+
+
 def validation_error_response(
     _: Request,
     exc: RequestValidationError,
 ) -> JSONResponse:
+    if not settings_compatible_response_wrap_enabled():
+        return JSONResponse(
+            status_code=422,
+            content={"detail": exc.errors()},
+        )
+
     return JSONResponse(
         status_code=422,
         content=error_response(

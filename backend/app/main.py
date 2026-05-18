@@ -11,7 +11,6 @@ from .core.config import settings
 from .core.database import init_db
 from .core.response import (
     UnifiedResponseMiddleware,
-    error_response,
     validation_error_response,
 )
 
@@ -20,6 +19,9 @@ from .core.response import (
 async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     init_db()
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    settings.vision_input_dir.mkdir(parents=True, exist_ok=True)
+    settings.vision_output_dir.mkdir(parents=True, exist_ok=True)
+    settings.rag_output_dir.mkdir(parents=True, exist_ok=True)
     yield
 
 
@@ -44,20 +46,16 @@ app.add_middleware(UnifiedResponseMiddleware)
 async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
-        content=error_response(
-            code=str(exc.status_code),
-            msg=str(exc.detail),
-            data=None,
-        ),
+        content={"detail": exc.detail},
         headers=exc.headers,
     )
 
 
 app.add_exception_handler(RequestValidationError, validation_error_response)
 
-app.include_router(auth.router, prefix=settings.api_v1_prefix)
-app.include_router(profile.router, prefix=settings.api_v1_prefix)
-app.include_router(analyze.router, prefix=settings.api_v1_prefix)
+app.include_router(auth.router)
+app.include_router(profile.router)
+app.include_router(analyze.router)
 
 
 @app.get("/health", tags=["system"])

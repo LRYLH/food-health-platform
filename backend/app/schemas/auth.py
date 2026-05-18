@@ -26,3 +26,8 @@ class AuthSessionResponse(BaseModel):
 
 class AuthMessageResponse(BaseModel):
     message: str
+
+
+class WechatLoginResponse(BaseModel):
+    access_token: str
+    is_new_user: bool

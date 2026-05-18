@@ -40,7 +40,23 @@ class Settings(BaseSettings):
     wechat_jscode2session_url: str = "https://api.weixin.qq.com/sns/jscode2session"
 
     upload_dir: Path = Path("uploads")
+    model_io_dir: Path = Path("model_io")
     cors_origins: list[str] = ["*"]
+    response_envelope_enabled: bool = False
+    algorithm_enabled: bool = True
+    algorithm_module_dir: Path | None = None
+
+    @property
+    def vision_input_dir(self) -> Path:
+        return self.model_io_dir / "vision_input"
+
+    @property
+    def vision_output_dir(self) -> Path:
+        return self.model_io_dir / "vision_output"
+
+    @property
+    def rag_output_dir(self) -> Path:
+        return self.model_io_dir / "rag_output"
 
     @property
     def database_url(self) -> str:

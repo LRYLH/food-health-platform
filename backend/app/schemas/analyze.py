@@ -47,3 +47,33 @@ class AnalyzeTextRequest(BaseModel):
 
 class AnalyzeResultRequest(BaseModel):
     task_id: str = Field(min_length=1, max_length=64)
+
+
+class TaskSubmitResponse(BaseModel):
+    task_id: str
+    status: ScanStatus
+
+
+class TaskResultPayload(BaseModel):
+    food_name: str | None
+    ingredients: list[str]
+    risk_level: str
+    health_advice: str
+    tts_audio_url: str | None = None
+
+
+class TaskStatusResponse(BaseModel):
+    status: ScanStatus
+    result: TaskResultPayload | None = None
+
+
+class HistoryRecord(BaseModel):
+    task_id: str
+    food_name: str | None
+    risk_level: str
+    created_at: datetime
+
+
+class HistoryResponse(BaseModel):
+    total: int
+    records: list[HistoryRecord]

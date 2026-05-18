@@ -83,7 +83,13 @@ def get_current_user(
         detail="Invalid or missing authentication token",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    access_token = request.cookies.get(settings.access_token_cookie_name)
+    authorization = request.headers.get("Authorization", "")
+    scheme, _, bearer_token = authorization.partition(" ")
+    access_token = (
+        bearer_token.strip()
+        if scheme.lower() == "bearer" and bearer_token.strip()
+        else request.cookies.get(settings.access_token_cookie_name)
+    )
     if not access_token:
         raise auth_error
 
