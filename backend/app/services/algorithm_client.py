@@ -15,7 +15,7 @@ def _algorithm_root() -> Path:
     return Path(__file__).resolve().parents[1] / "algorithm"
 
 
-def analyze_food_image(image_path: str) -> dict[str, Any]:
+def analyze_food_image(image_path: str, task_id: str = "") -> dict[str, Any]:
     if not settings.algorithm_enabled:
         raise AlgorithmUnavailable("Algorithm service is disabled by configuration")
 
@@ -33,7 +33,7 @@ def analyze_food_image(image_path: str) -> dict[str, Any]:
         raise AlgorithmUnavailable(f"Failed to load algorithm pipeline: {exc}") from exc
 
     try:
-        result = analyze(image_path)
+        result = analyze(image_path, task_id=task_id)
     except Exception as exc:
         raise AlgorithmUnavailable(f"Algorithm image analysis failed: {exc}") from exc
 

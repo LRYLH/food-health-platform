@@ -240,13 +240,42 @@ def create_scan_task(
 
 def _run_vision(task: ScanHistory) -> tuple[dict[str, Any], str | None]:
     try:
-        return analyze_food_image(task.image_path or ""), None
+        return analyze_food_image(task.image_path or "", task_id=task.task_id), None
     except AlgorithmUnavailable as exc:
         return {
+            "schema_version": "1.0",
+            "task_id": task.task_id,
+            "food_name": None,
+            "brand": None,
             "ingredients": {"items": []},
-            "nutrition_facts": {},
-            "expiration_date": {},
+            "nutrition_facts": {"items": []},
+            "expiration_date": {"value": None},
+            "detected_claims": [],
+            "ocr_text_blocks": [],
+            "meta": {"model": "unavailable"},
+            "error": {"code": "VISION_UNAVAILABLE", "message": str(exc)},
         }, str(exc)
+
+
+def _vision_output_payload(
+    *,
+    task: ScanHistory,
+    vision_result: dict[str, Any],
+    algorithm_error: str | None,
+) -> dict[str, Any]:
+    payload = {**vision_result}
+    payload["schema_version"] = str(payload.get("schema_version") or "1.0")
+    payload["task_id"] = task.task_id
+    payload.setdefault("ingredients", {"items": []})
+    payload.setdefault("nutrition_facts", {"items": []})
+    payload.setdefault("expiration_date", {"value": None})
+    payload.setdefault("detected_claims", [])
+    payload.setdefault("ocr_text_blocks", [])
+    meta = payload.get("meta")
+    payload["meta"] = meta if isinstance(meta, dict) else {}
+    if algorithm_error:
+        payload.setdefault("error", {"code": "VISION_UNAVAILABLE", "message": algorithm_error})
+    return payload
 
 
 def _build_rag_input(
@@ -301,9 +330,15 @@ def run_development_analysis(task_id: str) -> None:
         profile = db.scalar(select(HealthProfile).where(HealthProfile.user_id == task.user_id))
         user_profile = _profile_payload(profile)
         vision_result, algorithm_error = _run_vision(task)
-        rag_input = _build_rag_input(
+        vision_output = _vision_output_payload(
             task=task,
             vision_result=vision_result,
+            algorithm_error=algorithm_error,
+        )
+        _write_json(Path(_metadata(task)["vision_output_path"]), vision_output)
+        rag_input = _build_rag_input(
+            task=task,
+            vision_result=vision_output,
             user_profile=user_profile,
             algorithm_error=algorithm_error,
         )
