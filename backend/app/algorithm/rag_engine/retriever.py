@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
         print("算法引擎初始化完成！Milvus 和大模型已就绪。")
         
     except Exception as e:
-        print("算法引擎初始化失败 (请检查 Milvus 是否启动): {e}")
+        print(f"算法引擎初始化失败 (请检查 Milvus 是否启动): {e}")
         # 这里不抛出异常，允许 FastAPI 启动，但后续请求会报错，方便排查
         
     yield  # 此时应用开始接收 HTTP 请求
