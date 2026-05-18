@@ -1,5 +1,5 @@
 <template>
-  <view class="result-page">
+  <view class="result-page" :style="rootStyle">
     <view v-if="status === 'loading'" class="loading-block">
       <view class="spinner" />
       <text class="loading-text">正在分析中...</text>
@@ -62,7 +62,10 @@
 import { onLoad } from '@dcloudio/uni-app'
 import { computed, ref } from 'vue'
 import { pollUntilDone } from '@/api/tasks'
+import { useSettings } from '@/store/settings'
 import type { AnalysisResult } from '@/types/api'
+
+const { rootStyle } = useSettings()
 
 type Status = 'loading' | 'completed' | 'failed'
 
@@ -148,30 +151,30 @@ onLoad((options) => {
 }
 
 .loading-text {
-  font-size: 32rpx;
+  font-size: calc(32rpx * var(--font-scale, 1));
   color: #333;
   margin-bottom: 12rpx;
 }
 
 .loading-sub {
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale, 1));
   color: #999;
 }
 
 .failed-icon {
-  font-size: 96rpx;
+  font-size: calc(96rpx * var(--font-scale, 1));
   color: #ff9800;
   margin-bottom: 24rpx;
 }
 
 .failed-text {
-  font-size: 36rpx;
+  font-size: calc(36rpx * var(--font-scale, 1));
   color: #1a1a1a;
   margin-bottom: 12rpx;
 }
 
 .failed-sub {
-  font-size: 26rpx;
+  font-size: calc(26rpx * var(--font-scale, 1));
   color: #888;
   margin-bottom: 48rpx;
   text-align: center;
@@ -184,7 +187,7 @@ onLoad((options) => {
   background: #4caf50;
   border-radius: 999rpx;
   color: #fff;
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale, 1));
 }
 
 .answer-card {
@@ -203,7 +206,7 @@ onLoad((options) => {
   display: inline-block;
   background: linear-gradient(135deg, #4caf50, #2e7d32);
   color: #fff;
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale, 1));
   padding: 8rpx 24rpx;
   border-radius: 999rpx;
   font-weight: 500;
@@ -216,7 +219,7 @@ onLoad((options) => {
 }
 
 .answer-paragraph {
-  font-size: 30rpx;
+  font-size: calc(30rpx * var(--font-scale, 1));
   color: #1a1a1a;
   line-height: 1.7;
 }
@@ -236,13 +239,13 @@ onLoad((options) => {
 }
 
 .section-title {
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale, 1));
   font-weight: 600;
   color: #1a1a1a;
 }
 
 .section-count {
-  font-size: 22rpx;
+  font-size: calc(22rpx * var(--font-scale, 1));
   color: #999;
 }
 
@@ -261,7 +264,7 @@ onLoad((options) => {
 
 .reference-index {
   flex-shrink: 0;
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale, 1));
   color: #4caf50;
   font-weight: 600;
   width: 48rpx;
@@ -269,7 +272,7 @@ onLoad((options) => {
 
 .reference-text {
   flex: 1;
-  font-size: 26rpx;
+  font-size: calc(26rpx * var(--font-scale, 1));
   color: #555;
   line-height: 1.6;
 }
@@ -287,7 +290,7 @@ onLoad((options) => {
   border-radius: 16rpx;
   background: #fff;
   border: 1rpx solid #e5e5e5;
-  font-size: 30rpx;
+  font-size: calc(30rpx * var(--font-scale, 1));
   color: #444;
 }
 

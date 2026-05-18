@@ -1,5 +1,5 @@
 <template>
-  <view class="profile-page">
+  <view class="profile-page" :style="rootStyle">
     <view class="page-title">
       <text>我的健康档案</text>
       <text class="page-subtitle">用于个性化的食品风险判定</text>
@@ -65,6 +65,11 @@
       </view>
     </template>
 
+    <view class="settings-entry" @tap="goSettings">
+      <text class="settings-entry-label">设置</text>
+      <text class="settings-entry-chevron">›</text>
+    </view>
+
     <BottomNav current="/pages/profile/profile" />
   </view>
 </template>
@@ -74,6 +79,9 @@ import { onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
 import BottomNav from '@/components/BottomNav.vue'
 import { getProfile, updateProfile } from '@/api/profile'
+import { useSettings } from '@/store/settings'
+
+const { rootStyle } = useSettings()
 
 type AddType = 'allergen' | 'disease' | null
 
@@ -141,6 +149,10 @@ function removeDisease(i: number) {
   dirty.value = true
 }
 
+function goSettings() {
+  uni.navigateTo({ url: '/pages/settings/settings' })
+}
+
 async function save() {
   if (!dirty.value || saving.value) return
   saving.value = true
@@ -178,13 +190,13 @@ onShow(() => {
 }
 
 .page-title text:first-child {
-  font-size: 44rpx;
+  font-size: calc(44rpx * var(--font-scale, 1));
   font-weight: 600;
   color: #1a1a1a;
 }
 
 .page-subtitle {
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale, 1));
   color: #888;
   margin-top: 8rpx;
 }
@@ -225,13 +237,13 @@ onShow(() => {
 }
 
 .section-title {
-  font-size: 32rpx;
+  font-size: calc(32rpx * var(--font-scale, 1));
   font-weight: 600;
   color: #1a1a1a;
 }
 
 .section-count {
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale, 1));
   color: #999;
 }
 
@@ -247,14 +259,14 @@ onShow(() => {
   padding: 12rpx 20rpx;
   background: #e8f5e9;
   border-radius: 999rpx;
-  font-size: 26rpx;
+  font-size: calc(26rpx * var(--font-scale, 1));
   color: #2e7d32;
 }
 
 .chip-remove {
   margin-left: 12rpx;
   color: #999;
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale, 1));
   line-height: 1;
 }
 
@@ -278,7 +290,7 @@ onShow(() => {
   flex: 1;
   height: 72rpx;
   padding: 0 24rpx;
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale, 1));
   background: #f6f8fb;
   border-radius: 12rpx;
 }
@@ -287,7 +299,7 @@ onShow(() => {
 .cancel-btn {
   padding: 16rpx 28rpx;
   border-radius: 12rpx;
-  font-size: 26rpx;
+  font-size: calc(26rpx * var(--font-scale, 1));
 }
 
 .add-btn {
@@ -310,11 +322,32 @@ onShow(() => {
   text-align: center;
   padding: 28rpx;
   border-radius: 16rpx;
-  font-size: 32rpx;
+  font-size: calc(32rpx * var(--font-scale, 1));
   font-weight: 500;
 }
 
 .save-btn.disabled {
   background: #c8e6c9;
+}
+
+.settings-entry {
+  margin-top: 32rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settings-entry-label {
+  font-size: calc(30rpx * var(--font-scale, 1));
+  color: #1a1a1a;
+}
+
+.settings-entry-chevron {
+  font-size: calc(40rpx * var(--font-scale, 1));
+  color: #ccc;
+  line-height: 1;
 }
 </style>

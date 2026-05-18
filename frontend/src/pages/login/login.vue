@@ -1,5 +1,5 @@
 <template>
-  <view class="login-page">
+  <view class="login-page" :style="rootStyle">
     <view class="hero">
       <view class="logo">食</view>
       <view class="app-name">食品安全与健康助手</view>
@@ -30,7 +30,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { loginByWechat } from '@/api/auth'
+import { useSettings } from '@/store/settings'
 import { getToken } from '@/utils/storage'
+
+const { rootStyle } = useSettings()
 
 type Status = 'idle' | 'loading' | 'success' | 'error'
 
@@ -92,7 +95,7 @@ onMounted(() => {
   border-radius: 36rpx;
   background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
   color: #fff;
-  font-size: 96rpx;
+  font-size: calc(96rpx * var(--font-scale, 1));
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -102,14 +105,14 @@ onMounted(() => {
 }
 
 .app-name {
-  font-size: 44rpx;
+  font-size: calc(44rpx * var(--font-scale, 1));
   font-weight: 600;
   color: #1a1a1a;
   margin-bottom: 16rpx;
 }
 
 .tagline {
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale, 1));
   color: #8a8a8a;
   letter-spacing: 2rpx;
 }
@@ -144,7 +147,7 @@ onMounted(() => {
 }
 
 .status-text {
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale, 1));
   color: #666;
 }
 
@@ -158,7 +161,7 @@ onMounted(() => {
   line-height: 96rpx;
   background: #07c160;
   color: #fff;
-  font-size: 32rpx;
+  font-size: calc(32rpx * var(--font-scale, 1));
   font-weight: 500;
   border-radius: 16rpx;
 }
@@ -169,14 +172,14 @@ onMounted(() => {
 
 .error-msg {
   margin-top: 32rpx;
-  font-size: 26rpx;
+  font-size: calc(26rpx * var(--font-scale, 1));
   color: #e53935;
   text-align: center;
 }
 
 .hint {
   margin-top: 48rpx;
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale, 1));
   color: #999;
   text-align: center;
 }

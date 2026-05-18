@@ -1,9 +1,29 @@
 import { BASE_URL, USE_MOCK } from '../config/env'
 import { mockRequest } from '../mocks'
 import { ApiError } from './api-error'
-import { getToken } from './storage'
+import { clearToken, getToken } from './storage'
 
 export { ApiError }
+
+const LOGIN_PAGE_ROUTE = 'pages/login/login'
+let redirectingToLogin = false
+
+function handleUnauthorized(): void {
+  if (redirectingToLogin) return
+  clearToken()
+
+  const pages = getCurrentPages()
+  const current = pages[pages.length - 1]
+  if (current?.route === LOGIN_PAGE_ROUTE) return
+
+  redirectingToLogin = true
+  uni.reLaunch({
+    url: '/pages/login/login',
+    complete: () => {
+      redirectingToLogin = false
+    },
+  })
+}
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
 
@@ -56,6 +76,7 @@ export function request<T>(opts: RequestOptions): Promise<T> {
         if (code >= 200 && code < 300) {
           resolve(res.data as T)
         } else {
+          if (code === 401) handleUnauthorized()
           reject(new ApiError(code, `HTTP ${code}`, res.data))
         }
       },
@@ -85,6 +106,7 @@ export function upload<T>(opts: UploadOptions): Promise<T> {
             reject(new ApiError(code, 'invalid JSON response', res.data))
           }
         } else {
+          if (code === 401) handleUnauthorized()
           reject(new ApiError(code, `HTTP ${code}`, res.data))
         }
       },
