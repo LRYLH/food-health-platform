@@ -53,6 +53,8 @@ backend/model_io/vision_input/*
 !backend/model_io/vision_input/.gitkeep
 backend/model_io/vision_output/*
 !backend/model_io/vision_output/.gitkeep
+backend/model_io/rag_input/*
+!backend/model_io/rag_input/.gitkeep
 backend/model_io/rag_output/*
 !backend/model_io/rag_output/.gitkeep
 

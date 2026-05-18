@@ -326,15 +326,18 @@ def analyze_image_layout(image: np.ndarray) -> dict:
     expiration_raw = _extract_section_text(text_blocks, "expiration")
     all_text = "\n".join(b["text"] for b in text_blocks)
 
-    # ── DeepSeek 文本解析（主路径，已废弃，保留作为 layout_analyzer 直接调用时的兼容）──
+    # ── DeepSeek 文本解析（主路径）──
     try:
         ds = deepseek_parse(all_text)
         if ds and ds.get("ingredients"):
             logger.info("版面分析: DeepSeek 文本解析")
             return {
+                "food_name": ds.get("food_name"),
+                "brand": ds.get("brand"),
                 "ingredients": {"raw_text": ingredients_raw, "items": ds.get("ingredients") or []},
-                "nutrition_facts": {"raw_text": nutrition_raw, "items": ds.get("nutrition") or []},
+                "nutrition_facts": {"raw_text": nutrition_raw, "serving_size": ds.get("serving_size"), "items": ds.get("nutrition") or []},
                 "expiration_date": {"raw_text": expiration_raw, "value": ds.get("expiration")},
+                "detected_claims": ds.get("detected_claims") or [],
                 "meta": {"ocr_engine": "baidu_ocr+deepseek", "text_blocks_count": len(text_blocks)},
                 "_raw_text_blocks": text_blocks,
             }
