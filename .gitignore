@@ -44,10 +44,8 @@ milvus-data/
 *.onnx
 *.pkl
 backend/app/algorithm/models/
-backend/app/algorithm/data/hard_samples/
-backend/app/algorithm/data/samples/
-backend/app/algorithm/data/standards/
-backend/app/algorithm/data/parsed_mds/
+backend/app/algorithm/data/*
+!backend/app/algorithm/data/.gitkeep
 backend/uploads/
 
 # 模型 I/O 目录：忽略输入图片和输出结果，保留 .gitkeep
@@ -76,6 +74,7 @@ frontend/.hbuilderx/
 # 排除本地持久化挂载的数据，防止数据库内容进入 Git
 backend/mysql-data/
 backend/redis-data/
+backend/hf-cache/
 
 # ==========================================
 # 文档与临时资产 (Docs & Temp)
