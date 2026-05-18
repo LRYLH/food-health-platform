@@ -48,6 +48,14 @@ backend/app/algorithm/data/hard_samples/
 backend/app/algorithm/data/samples/
 backend/uploads/
 
+# 模型 I/O 目录：忽略输入图片和输出结果，保留 .gitkeep
+backend/model_io/vision_input/*
+!backend/model_io/vision_input/.gitkeep
+backend/model_io/vision_output/*
+!backend/model_io/vision_output/.gitkeep
+backend/model_io/rag_output/*
+!backend/model_io/rag_output/.gitkeep
+
 # ==========================================
 # 前端 (Node.js - Frontend/Uni-app)
 # ==========================================

@@ -8,8 +8,19 @@
     # → {"ingredients": {...}, "nutrition_facts": {...}, "expiration_date": {...}, "meta": {...}}
 """
 
-from vision_engine.preprocessor import run_image_pipeline
-from vision_engine.layout_analyzer import analyze_image_layout
+try:
+    from .preprocessor import run_image_pipeline
+    from .layout_analyzer import analyze_image_layout
+except ImportError:
+    import sys
+    from pathlib import Path
+
+    algorithm_root = Path(__file__).resolve().parents[1]
+    if str(algorithm_root) not in sys.path:
+        sys.path.insert(0, str(algorithm_root))
+
+    from vision_engine.preprocessor import run_image_pipeline
+    from vision_engine.layout_analyzer import analyze_image_layout
 
 
 def analyze(source) -> dict:

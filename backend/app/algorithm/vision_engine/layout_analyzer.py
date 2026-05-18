@@ -10,8 +10,19 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from vision_engine.baidu_ocr import BaiduOCR
-from vision_engine.deepseek_vision import parse_ocr_text as deepseek_parse
+try:
+    from .baidu_ocr import BaiduOCR
+    from .deepseek_vision import parse_ocr_text as deepseek_parse
+except ImportError:
+    import sys
+    from pathlib import Path
+
+    algorithm_root = Path(__file__).resolve().parents[1]
+    if str(algorithm_root) not in sys.path:
+        sys.path.insert(0, str(algorithm_root))
+
+    from vision_engine.baidu_ocr import BaiduOCR
+    from vision_engine.deepseek_vision import parse_ocr_text as deepseek_parse
 
 logger = logging.getLogger(__name__)
 

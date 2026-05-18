@@ -1,4 +1,7 @@
 from pathlib import Path
+import json
+import shutil
+from typing import Any
 from uuid import uuid4
 
 from fastapi import UploadFile
@@ -10,7 +13,89 @@ from ..core.database import SessionLocal
 from ..models.health_profile import HealthProfile
 from ..models.scan_history import RiskLevel, ScanHistory, ScanStatus
 from ..models.user import User
-from ..schemas.analyze import AnalyzeTextRequest
+from .algorithm_client import AlgorithmUnavailable, analyze_food_image
+
+
+SUGAR_KEYWORDS = ["sugar", "sucrose", "glucose", "fructose", "糖", "蔗糖", "葡萄糖", "果糖"]
+SODIUM_KEYWORDS = ["sodium", "salt", "钠", "食盐", "盐"]
+FAT_KEYWORDS = ["fat", "trans fat", "脂肪", "反式脂肪"]
+
+
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _read_json(path: str | Path | None) -> dict[str, Any]:
+    if not path:
+        return {}
+    target = Path(path)
+    if not target.exists():
+        return {}
+    return json.loads(target.read_text(encoding="utf-8"))
+
+
+def _flatten(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        result: list[str] = []
+        for item in value.values():
+            result.extend(_flatten(item))
+        return result
+    if isinstance(value, (list, tuple, set)):
+        result: list[str] = []
+        for item in value:
+            result.extend(_flatten(item))
+        return result
+    return [str(value)]
+
+
+def _task_paths(task_id: str, suffix: str = ".bin") -> dict[str, Path]:
+    return {
+        "vision_input": settings.vision_input_dir / f"{task_id}{suffix}",
+        "vision_output": settings.vision_output_dir / f"{task_id}.json",
+        "rag_output": settings.rag_output_dir / f"{task_id}.json",
+    }
+
+
+def _metadata(task: ScanHistory) -> dict[str, Any]:
+    raw_result = task.raw_result if isinstance(task.raw_result, dict) else {}
+    meta = raw_result.get("meta")
+    return meta if isinstance(meta, dict) else {}
+
+
+def extract_ingredients(vision_result: dict[str, Any]) -> list[str]:
+    ingredients = vision_result.get("ingredients", {})
+    if isinstance(ingredients, dict):
+        ingredients = ingredients.get("items", [])
+    return [item.strip() for item in _flatten(ingredients) if item.strip()]
+
+
+def extract_food_name(vision_result: dict[str, Any]) -> str | None:
+    for key in ("food_name", "product_name", "name"):
+        value = vision_result.get(key)
+        if value:
+            return str(value)
+    meta = vision_result.get("meta")
+    if isinstance(meta, dict) and meta.get("food_name"):
+        return str(meta["food_name"])
+    return None
+
+
+def risk_level_code(risk_level: RiskLevel) -> str:
+    if risk_level == RiskLevel.high:
+        return "HIGH"
+    if risk_level == RiskLevel.medium:
+        return "MEDIUM"
+    return "LOW"
+
+
+def _profile_has(values: list[str], keywords: set[str]) -> bool:
+    normalized = {value.strip().lower() for value in values if value}
+    return bool(normalized & keywords)
 
 
 def _risk_from_text(text: str, allergies: list[str], diseases: list[str]) -> tuple[RiskLevel, list[str]]:
@@ -19,17 +104,20 @@ def _risk_from_text(text: str, allergies: list[str], diseases: list[str]) -> tup
 
     for allergen in allergies:
         if allergen and allergen.lower() in normalized:
-            warnings.append(f"Detected possible allergen: {allergen}")
+            warnings.append(f"检测到可能的过敏原：{allergen}")
 
-    diabetes_keywords = ["sugar", "sucrose", "glucose", "fructose", "糖", "蔗糖", "葡萄糖"]
-    if any(disease in {"diabetes", "糖尿病"} for disease in diseases):
-        if any(keyword in normalized for keyword in diabetes_keywords):
-            warnings.append("The product may contain sugars that need attention for diabetes.")
+    disease_values = [disease.lower() for disease in diseases if disease]
+    if _profile_has(disease_values, {"diabetes", "糖尿病", "2型糖尿病"}):
+        if any(keyword.lower() in normalized for keyword in SUGAR_KEYWORDS):
+            warnings.append("该食品可能含糖，糖尿病用户需关注摄入量。")
 
-    hypertension_keywords = ["sodium", "salt", "钠", "盐"]
-    if any(disease in {"hypertension", "高血压"} for disease in diseases):
-        if any(keyword in normalized for keyword in hypertension_keywords):
-            warnings.append("The product may contain sodium/salt that needs attention for hypertension.")
+    if _profile_has(disease_values, {"hypertension", "高血压"}):
+        if any(keyword.lower() in normalized for keyword in SODIUM_KEYWORDS):
+            warnings.append("该食品可能含钠或盐，高血压用户需关注钠摄入。")
+
+    if _profile_has(disease_values, {"hyperlipidemia", "高血脂"}):
+        if any(keyword.lower() in normalized for keyword in FAT_KEYWORDS):
+            warnings.append("该食品可能含脂肪，高血脂用户需关注脂肪摄入。")
 
     if len(warnings) >= 2:
         return RiskLevel.high, warnings
@@ -38,26 +126,40 @@ def _risk_from_text(text: str, allergies: list[str], diseases: list[str]) -> tup
     return RiskLevel.low, warnings
 
 
-def _suggestions_for_risk(risk_level: RiskLevel) -> list[str]:
+def _risk_suggestion(risk_level: RiskLevel) -> str:
     if risk_level == RiskLevel.high:
-        return [
-            "Avoid eating before confirming the ingredient list.",
-            "Consult a doctor or dietitian if this conflicts with your health profile.",
-        ]
+        return "建议暂缓食用，确认配料表和营养成分后再决定。"
     if risk_level == RiskLevel.medium:
-        return [
-            "Eat cautiously and check the full ingredient and nutrition labels.",
-            "Prefer lower sugar, lower sodium, or allergen-free alternatives when available.",
-        ]
-    return ["No obvious personal risk was detected in the current development analysis."]
+        return "建议少量食用，并重点查看完整配料和营养成分表。"
+    return "当前分析未发现明显的个人健康风险。"
+
+
+def load_vision_output(task: ScanHistory) -> dict[str, Any]:
+    return _read_json(_metadata(task).get("vision_output_path"))
+
+
+def load_rag_output(task: ScanHistory) -> dict[str, Any]:
+    payload = _read_json(_metadata(task).get("rag_output_path"))
+    if not payload:
+        return {}
+    return {
+        "answer": str(payload.get("answer", "")),
+        "reference": [str(item) for item in payload.get("reference", [])],
+    }
+
+
+def build_task_result_payload(task: ScanHistory) -> dict[str, Any]:
+    rag_result = load_rag_output(task)
+    if rag_result:
+        return rag_result
+    return {"answer": "", "reference": []}
 
 
 async def save_upload_file(file: UploadFile, user_id: int) -> str:
-    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    settings.vision_input_dir.mkdir(parents=True, exist_ok=True)
     suffix = Path(file.filename or "").suffix or ".bin"
-    path = settings.upload_dir / f"user_{user_id}_{uuid4().hex}{suffix}"
-    content = await file.read()
-    path.write_bytes(content)
+    path = settings.vision_input_dir / f"user_{user_id}_{uuid4().hex}{suffix}"
+    path.write_bytes(await file.read())
     return str(path)
 
 
@@ -65,8 +167,7 @@ def create_scan_task(
     db: Session,
     user: User,
     question: str | None,
-    image_path: str | None = None,
-    structured_input: dict | None = None,
+    image_path: str,
 ) -> ScanHistory:
     task = ScanHistory(
         task_id=uuid4().hex,
@@ -74,72 +175,147 @@ def create_scan_task(
         image_path=image_path,
         question=question,
         status=ScanStatus.pending,
-        raw_result=structured_input or {},
+        raw_result={},
     )
     db.add(task)
+    db.commit()
+    db.refresh(task)
+
+    source = Path(image_path)
+    paths = _task_paths(task.task_id, source.suffix)
+    paths["vision_input"].parent.mkdir(parents=True, exist_ok=True)
+    if source.resolve() != paths["vision_input"].resolve():
+        shutil.move(str(source), paths["vision_input"])
+
+    task.image_path = str(paths["vision_input"])
+    task.raw_result = {
+        "meta": {
+            "vision_input_path": str(paths["vision_input"]),
+            "vision_output_path": str(paths["vision_output"]),
+            "rag_output_path": str(paths["rag_output"]),
+        }
+    }
     db.commit()
     db.refresh(task)
     return task
 
 
+def _run_vision(task: ScanHistory) -> str | None:
+    meta = _metadata(task)
+    try:
+        vision_result = analyze_food_image(task.image_path or "")
+        error = None
+    except AlgorithmUnavailable as exc:
+        vision_result = {
+            "ingredients": {"items": []},
+            "nutrition_facts": {},
+            "expiration_date": {},
+        }
+        error = str(exc)
+        meta["algorithm_error"] = error
+
+    vision_result["meta"] = {
+        **(vision_result.get("meta") if isinstance(vision_result.get("meta"), dict) else {}),
+        **meta,
+    }
+    _write_json(Path(meta["vision_output_path"]), vision_result)
+    task.raw_result = vision_result
+    return error
+
+
+def _fallback_rag_payload(
+    *,
+    task: ScanHistory,
+    vision_result: dict[str, Any],
+    risk_level: RiskLevel,
+    warnings: list[str],
+) -> dict[str, Any]:
+    food_name = extract_food_name(vision_result) or "该食品"
+    ingredients = extract_ingredients(vision_result)
+    ingredients_text = "、".join(ingredients) if ingredients else "暂未识别到明确配料"
+    warning_text = " ".join(warnings) if warnings else _risk_suggestion(risk_level)
+    answer = (
+        f"{food_name}的识别配料包括：{ingredients_text}。"
+        f"综合用户健康档案，风险等级为{risk_level_code(risk_level)}。{warning_text}"
+    )
+    return {
+        "answer": answer,
+        "reference": [
+            "vision_output",
+            *warnings,
+        ],
+    }
+
+
+def _run_rag(
+    *,
+    task: ScanHistory,
+    vision_result: dict[str, Any],
+    risk_level: RiskLevel,
+    warnings: list[str],
+) -> dict[str, Any]:
+    meta = _metadata(task)
+    # The RAG owner contract is a JSON object with answer and reference.
+    # Until the concrete RAG callable is provided, the backend writes the same
+    # shape so the frontend contract remains stable.
+    payload = _fallback_rag_payload(
+        task=task,
+        vision_result=vision_result,
+        risk_level=risk_level,
+        warnings=warnings,
+    )
+    _write_json(Path(meta["rag_output_path"]), payload)
+    return payload
+
+
 def run_development_analysis(task_id: str) -> None:
     db = SessionLocal()
+    task: ScanHistory | None = None
     try:
         task = db.scalar(select(ScanHistory).where(ScanHistory.task_id == task_id))
         if task is None:
             return
 
         task.status = ScanStatus.processing
+        task.error_message = None
         db.commit()
 
-        profile = db.scalar(
-            select(HealthProfile).where(HealthProfile.user_id == task.user_id)
-        )
+        algorithm_error = _run_vision(task)
+        vision_result = load_vision_output(task)
+
+        profile = db.scalar(select(HealthProfile).where(HealthProfile.user_id == task.user_id))
         allergies = profile.allergies if profile else []
         diseases = profile.chronic_diseases if profile else []
 
-        raw_text_parts = [task.question or ""]
-        raw_text_parts.extend(task.raw_result.get("ingredients", []))
-        raw_text_parts.extend(str(value) for value in task.raw_result.get("nutrition", {}).values())
-        raw_text = " ".join(raw_text_parts)
-        risk_level, warnings = _risk_from_text(raw_text, allergies, diseases)
+        risk_level, warnings = _risk_from_text(
+            " ".join([task.question or "", *_flatten(vision_result)]),
+            allergies,
+            diseases,
+        )
+        _run_rag(
+            task=task,
+            vision_result=vision_result,
+            risk_level=risk_level,
+            warnings=warnings,
+        )
 
         task.status = ScanStatus.completed
         task.risk_level = risk_level
         task.warnings = warnings
-        task.suggestions = _suggestions_for_risk(risk_level)
-        task.summary = (
-            "Development analysis completed. This result is rule-based and should be "
-            "replaced by the algorithm service before production use."
-        )
+        task.suggestions = [_risk_suggestion(risk_level)]
+        task.summary = build_task_result_payload(task)["answer"]
         task.extracted_text = {
-            "question": task.question,
-            "image_path": task.image_path,
-            "structured_input": task.raw_result,
+            "food_name": extract_food_name(vision_result),
+            "ingredients": extract_ingredients(vision_result),
         }
+        task.error_message = algorithm_error
         db.commit()
     except Exception as exc:
-        task = db.scalar(select(ScanHistory).where(ScanHistory.task_id == task_id))
+        if task is None:
+            task = db.scalar(select(ScanHistory).where(ScanHistory.task_id == task_id))
         if task is not None:
             task.status = ScanStatus.failed
             task.error_message = str(exc)
             db.commit()
     finally:
         db.close()
-
-
-def create_text_scan_task(
-    db: Session,
-    user: User,
-    payload: AnalyzeTextRequest,
-) -> ScanHistory:
-    return create_scan_task(
-        db=db,
-        user=user,
-        question=payload.question,
-        structured_input={
-            "product_name": payload.product_name,
-            "ingredients": payload.ingredients,
-            "nutrition": payload.nutrition,
-        },
-    )

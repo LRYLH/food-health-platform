@@ -1,7 +1,4 @@
 from datetime import UTC, datetime, timedelta
-import hashlib
-import hmac
-import secrets
 from typing import Any
 from uuid import uuid4
 
@@ -14,42 +11,6 @@ from ..models.user import User
 from .config import settings
 from .database import get_db
 from .redis_client import get_redis
-
-
-PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
-PASSWORD_HASH_ITERATIONS = 260000
-
-
-def hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode("utf-8"),
-        salt.encode("utf-8"),
-        PASSWORD_HASH_ITERATIONS,
-    ).hex()
-    return (
-        f"{PASSWORD_HASH_ALGORITHM}"
-        f"${PASSWORD_HASH_ITERATIONS}"
-        f"${salt}"
-        f"${digest}"
-    )
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    try:
-        algorithm, iterations, salt, expected_digest = hashed_password.split("$", 3)
-        if algorithm != PASSWORD_HASH_ALGORITHM:
-            return False
-        actual_digest = hashlib.pbkdf2_hmac(
-            "sha256",
-            plain_password.encode("utf-8"),
-            salt.encode("utf-8"),
-            int(iterations),
-        ).hex()
-    except (AttributeError, TypeError, ValueError):
-        return False
-    return hmac.compare_digest(actual_digest, expected_digest)
 
 
 def create_token(
@@ -81,20 +42,8 @@ def create_access_token(subject: str) -> tuple[str, str]:
     )
 
 
-def create_refresh_token(subject: str) -> tuple[str, str]:
-    return create_token(
-        subject=subject,
-        token_type="refresh",
-        expires_delta=timedelta(minutes=settings.refresh_token_expire_minutes),
-    )
-
-
 def access_token_key(user_id: int | str, jti: str) -> str:
     return f"auth:access:{user_id}:{jti}"
-
-
-def refresh_token_key(user_id: int | str, jti: str) -> str:
-    return f"auth:refresh:{user_id}:{jti}"
 
 
 def decode_token(token: str, expected_type: str) -> dict[str, Any]:
@@ -122,7 +71,9 @@ def get_current_user(
         detail="Invalid or missing authentication token",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    access_token = request.cookies.get(settings.access_token_cookie_name)
+    authorization = request.headers.get("Authorization", "")
+    scheme, _, bearer_token = authorization.partition(" ")
+    access_token = bearer_token.strip() if scheme.lower() == "bearer" else ""
     if not access_token:
         raise auth_error
 
