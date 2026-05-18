@@ -23,3 +23,16 @@ numpy==2.2.6
 opencv-python-headless==4.13.0.92
 pillow==12.2.0
 huggingface_hub==1.14.0
+
+# ==========================================
+# RAG 知识库与 LLM 对接依赖 
+# ==========================================
+llama-index
+llama-index-core
+pymilvus
+llama-index-vector-stores-milvus
+llama-parse
+nest-asyncio
+llama-index-embeddings-huggingface
+dashscope
+python-dotenv
