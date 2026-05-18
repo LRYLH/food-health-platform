@@ -26,6 +26,7 @@ services:
         restart: always
 
     app:
+        image: food-health-backend:latest
         build: .
         container_name: food_health_app
         ports:
@@ -50,7 +51,8 @@ services:
 
 
     algo_service:
-        build: .
+        image: food-health-backend:latest
+        pull_policy: never
         container_name: food_health_algo
         ports:
             - "8001:8001"
