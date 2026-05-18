@@ -19,8 +19,6 @@ Thumbs.db
 .baidu_token_cache
 backend/.env
 !backend/.env.example
-docker/.env
-!docker/.env.example
 .claude
 
 # ==========================================
@@ -43,9 +41,10 @@ htmlcov/
 *.bin
 *.onnx
 *.pkl
-algorithm/models/
-algorithm/data/hard_samples/
-algorithm/data/samples/
+backend/app/algorithm/models/
+backend/app/algorithm/data/hard_samples/
+backend/app/algorithm/data/samples/
+backend/uploads/
 
 # ==========================================
 # 前端 (Node.js - Frontend/Uni-app)
@@ -61,10 +60,6 @@ frontend/.hbuilderx/
 # 基础设施与本地数据 (Docker & Data)
 # ==========================================
 # 排除本地持久化挂载的数据，防止数据库内容进入 Git
-docker/pg_data/
-docker/minio_data/
-docker/milvus_data/
-docker/redis_data/
 backend/mysql-data/
 backend/redis-data/
 
