@@ -82,6 +82,17 @@ async def ask_question(request: RagAnalysisRequest):
 
         retrieved_nodes = retriever.retrieve(search_query)
         knowledge_base_str = "\n\n".join([node.node.text for node in retrieved_nodes])
+        # 获取所有被检索出来的文档片段的余弦相似度打分
+        node_scores = [node.score for node in retrieved_nodes if node.score is not None]
+        
+        # 1. 检索置信度：取所有相关片段的平均分 (如果搜不到给 0.1)
+        real_retrieval_score = sum(node_scores) / len(node_scores) if node_scores else 0.1
+        
+        # 2. 视觉置信度：从主后端传来的 request 里取 (如果没有给 0.8)
+        real_vision_score = request.vision.get("meta", {}).get("quality_score", 0.8)
+        
+        # 3. 总体置信度：简单取视觉和检索的平均值 (或者按需加权)
+        real_overall_score = (real_retrieval_score + real_vision_score) / 2
 
         allergens = ", ".join(request.user_profile.get("allergens", [])) or "无"
         diseases = ", ".join(request.user_profile.get("chronic_diseases", [])) or "无"
@@ -137,9 +148,9 @@ async def ask_question(request: RagAnalysisRequest):
             "reference": [node.node.text[:200] + "..." for node in retrieved_nodes],
             "citations": [],
             "confidence": {
-                "overall": 0.8,
-                "vision": request.vision.get("meta", {}).get("quality_score", 0.8),
-                "retrieval": 0.85
+                "overall": round(real_overall_score, 4),
+                "vision": round(real_vision_score, 4),
+                "retrieval": round(real_retrieval_score, 4)
             },
             "meta": {
                 "rag_model": "qwen-max",
