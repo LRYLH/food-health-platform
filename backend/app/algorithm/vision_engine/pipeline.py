@@ -7,8 +7,6 @@
 import logging
 import time
 
-import numpy as np
-
 from .preprocessor import run_image_pipeline
 
 logger = logging.getLogger(__name__)
@@ -20,30 +18,21 @@ def analyze(source, task_id: str = "") -> dict:
     Args:
         source: 图片文件路径 (str) 或 RGB numpy 数组 (np.ndarray)。
         task_id: 任务 ID，用于结果追溯。
-
-    Returns:
-        VisionResult schema:
-        {
-            "schema_version": "1.0",
-            "task_id": "...",
-            "food_name": "...",
-            "brand": "...",
-            "ingredients": {"raw_text": "...", "items": [...]},
-            "nutrition_facts": {"raw_text": "...", "serving_size": "...", "items": [...]},
-            "expiration_date": {"raw_text": "...", "value": "..."},
-            "detected_claims": [...],
-            "ocr_text_blocks": [...],
-            "meta": {"model": "...", "ocr_engine": "...", "quality_score": 0.0,
-                     "elapsed_ms": 0, "preprocess_steps": {...}}
-        }
     """
     from .layout_analyzer import analyze_image_layout
 
     t0 = time.perf_counter()
 
     # 1. 图像预处理
-    prep = run_image_pipeline(source)
-    image = prep["image"]
+    try:
+        prep = run_image_pipeline(source)
+        image = prep["image"]
+        quality_raw = prep["quality_score"]
+        steps = prep["steps"]
+    except Exception as e:
+        logger.exception("图像预处理失败")
+        elapsed_ms = int((time.perf_counter() - t0) * 1000)
+        return _error_result(task_id, "PREPROCESS_FAILED", str(e), elapsed_ms)
 
     # 2. Baidu OCR + DeepSeek 文本解析（主路径）
     layout = analyze_image_layout(image)
@@ -69,10 +58,26 @@ def analyze(source, task_id: str = "") -> dict:
         "meta": {
             "model": "baidu_ocr+deepseek",
             "ocr_engine": meta.get("ocr_engine", "baidu_ocr"),
-            "quality_score": _normalize_quality(prep["quality_score"]),
+            "quality_score": _normalize_quality(quality_raw),
             "elapsed_ms": elapsed_ms,
-            "preprocess_steps": prep["steps"],
+            "preprocess_steps": steps,
         },
+    }
+
+
+def _error_result(task_id: str, code: str, message: str, elapsed_ms: int) -> dict:
+    return {
+        "schema_version": "1.0",
+        "task_id": task_id,
+        "food_name": None,
+        "brand": None,
+        "ingredients": {"raw_text": None, "items": []},
+        "nutrition_facts": {"raw_text": None, "serving_size": None, "items": []},
+        "expiration_date": {"raw_text": None, "value": None},
+        "detected_claims": [],
+        "ocr_text_blocks": [],
+        "meta": {"model": "error", "elapsed_ms": elapsed_ms},
+        "error": {"code": code, "message": message},
     }
 
 

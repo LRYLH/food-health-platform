@@ -5,15 +5,14 @@ vision_engine 主入口 — 批量处理食品包装图片，输出 VisionResult
     # 按 task_id 处理单张
     python vision_main.py --task-id 6f2b4c3d9f8142e6b2b0d6c9cf7d7f10
 
-    # 扫描 vision_input 下所有图片，文件名 stem 作为 task_id
+    # 批量：扫描 vision_input 下所有 *.request.json
     python vision_main.py
 
-会读取 model_io/vision_input/{task_id}.request.json（若存在），
-结果写入 model_io/vision_output/{task_id}.json，符合 VisionResult 契约。
+输入: model_io/vision_input/{task_id}.request.json（含 image.path 指向实际图片）
+输出: model_io/vision_output/{task_id}.json（VisionResult 格式）
 """
 import argparse
 import json
-import sys
 import time
 from pathlib import Path
 
@@ -54,33 +53,48 @@ def process_image(image_path: Path, task_id: str) -> dict:
     return result
 
 
-def run_batch():
-    """扫描 vision_input 下所有图片，文件名 stem 作为 task_id。"""
-    exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-    images = sorted(
-        [p for p in INPUT_DIR.glob("*") if p.suffix.lower() in exts and not p.name.startswith(".")]
-    )
+def _find_image_for_request(req: dict, task_id: str) -> Path:
+    """从 BackendVisionRequest 中解析图片路径。"""
+    image_meta = req.get("image", {})
+    rel_path = image_meta.get("path", "")
+    if rel_path:
+        p = Path(rel_path)
+        if not p.is_absolute():
+            p = Path("/app") / p
+        if p.exists():
+            return p
+    # 回退：在 vision_input 下按 task_id 查找
+    exts = [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
+    for ext in exts:
+        candidate = INPUT_DIR / f"{task_id}{ext}"
+        if candidate.exists():
+            return candidate
+    return INPUT_DIR / f"{task_id}.jpg"
 
-    if not images:
-        print(f"未在 {INPUT_DIR} 中找到图片文件")
+
+def run_batch():
+    """扫描 vision_input 下所有 *.request.json，逐一处理。"""
+    requests = sorted(INPUT_DIR.glob("*.request.json"))
+
+    if not requests:
+        print(f"未在 {INPUT_DIR} 中找到 *.request.json 文件")
         return
 
     print(f"\n{'='*60}")
-    print(f"  vision_engine 批量分析 — {len(images)} 张图片")
+    print(f"  vision_engine 批量分析 — {len(requests)} 个任务")
     print(f"{'='*60}\n")
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    for img in images:
-        task_id = img.stem
-        req = load_request(task_id)
-        if "task_id" in req and req["task_id"] != task_id:
-            task_id = req["task_id"]
+    for req_path in requests:
+        req = json.loads(req_path.read_text(encoding="utf-8"))
+        task_id = req.get("task_id", req_path.stem)
 
-        print(f"[{task_id}] {img.name} → ", end="", flush=True)
+        img_path = _find_image_for_request(req, task_id)
+        print(f"[{task_id}] {img_path.name} → ", end="", flush=True)
 
         try:
-            result = process_image(img, task_id)
+            result = process_image(img_path, task_id)
             out_path = OUTPUT_DIR / f"{task_id}.json"
             out_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -126,7 +140,11 @@ def run_single(task_id: str):
         img_path = candidates[0] if candidates else INPUT_DIR / f"{task_id}.jpg"
 
     result = process_image(img_path, task_id)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = OUTPUT_DIR / f"{task_id}.json"
+    out_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(f"\n结果已写入: {out_path}")
 
 
 if __name__ == "__main__":
