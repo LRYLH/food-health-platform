@@ -13,9 +13,20 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+def _find_env():
+    """向上遍历目录树查找 .env 文件"""
+    current = Path(__file__).resolve().parent
+    for _ in range(6):
+        candidate = current / ".env"
+        if candidate.exists():
+            return candidate
+        current = current.parent
+    return None
+
+
 def _load_env():
-    env_path = Path(__file__).resolve().parent.parent / ".env"
-    if not env_path.exists():
+    env_path = _find_env()
+    if env_path is None:
         return
     with open(env_path, encoding="utf-8") as f:
         for line in f:
@@ -68,7 +79,7 @@ def parse_ocr_text(ocr_text: str) -> dict:
     """
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
     if not api_key or api_key == "your_deepseek_api_key_here":
-        raise RuntimeError("请在 .env 中设置 DEEPSEEK_API_KEY")
+        raise RuntimeError("请在 backend/.env 中设置 DEEPSEEK_API_KEY")
 
     # 限制文本长度，避免超出 token 限制
     if len(ocr_text) > 6000:

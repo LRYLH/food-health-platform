@@ -19,9 +19,20 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+def _find_env():
+    """向上遍历目录树查找 .env 文件"""
+    current = Path(__file__).resolve().parent
+    for _ in range(6):
+        candidate = current / ".env"
+        if candidate.exists():
+            return candidate
+        current = current.parent
+    return None
+
+
 def _load_env():
-    env_path = Path(__file__).resolve().parent.parent / ".env"
-    if not env_path.exists():
+    env_path = _find_env()
+    if env_path is None:
         return
     with open(env_path, encoding="utf-8") as f:
         for line in f:
@@ -103,7 +114,7 @@ class BaiduOCR:
             [{"text": str, "box": [[x1,y1],[x2,y2],[x3,y3],[x4,y4]], "confidence": float}, ...]
         """
         if not self.available:
-            raise RuntimeError("百度 OCR 未配置，请在 algorithm/.env 中设置 BAIDU_OCR_API_KEY 和 BAIDU_OCR_SECRET_KEY")
+            raise RuntimeError("百度 OCR 未配置，请在 backend/.env 中设置 BAIDU_OCR_API_KEY 和 BAIDU_OCR_SECRET_KEY")
 
         img_b64 = self._encode_image(image)
         token = self._get_token()
