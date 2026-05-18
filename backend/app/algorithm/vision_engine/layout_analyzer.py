@@ -312,6 +312,7 @@ def analyze_image_layout(image: np.ndarray) -> dict:
             "nutrition_facts": {"raw_text": None, "items": []},
             "expiration_date": {"raw_text": None, "value": None},
             "meta": {"ocr_engine": _ocr.engine_name, "text_blocks_count": 0},
+            "_raw_text_blocks": [],
         }
 
     # 2. 分类并排序
@@ -325,7 +326,7 @@ def analyze_image_layout(image: np.ndarray) -> dict:
     expiration_raw = _extract_section_text(text_blocks, "expiration")
     all_text = "\n".join(b["text"] for b in text_blocks)
 
-    # ── DeepSeek 文本解析（主路径）──
+    # ── DeepSeek 文本解析（主路径，已废弃，保留作为 layout_analyzer 直接调用时的兼容）──
     try:
         ds = deepseek_parse(all_text)
         if ds and ds.get("ingredients"):
@@ -335,9 +336,10 @@ def analyze_image_layout(image: np.ndarray) -> dict:
                 "nutrition_facts": {"raw_text": nutrition_raw, "items": ds.get("nutrition") or []},
                 "expiration_date": {"raw_text": expiration_raw, "value": ds.get("expiration")},
                 "meta": {"ocr_engine": "baidu_ocr+deepseek", "text_blocks_count": len(text_blocks)},
+                "_raw_text_blocks": text_blocks,
             }
     except Exception as e:
-        logger.warning("DeepSeek 解析失败，回退传统方法: %s", e)
+        logger.warning("DeepSeek 文本解析失败，回退传统方法: %s", e)
 
     # ── 传统规则解析（回退路径）──
     # 兜底：全文扫描关键词
@@ -367,4 +369,5 @@ def analyze_image_layout(image: np.ndarray) -> dict:
         "nutrition_facts": {"raw_text": nutrition_raw, "items": []},
         "expiration_date": _parse_expiration(expiration_raw),
         "meta": {"ocr_engine": _ocr.engine_name, "text_blocks_count": len(text_blocks)},
+        "_raw_text_blocks": text_blocks,
     }
