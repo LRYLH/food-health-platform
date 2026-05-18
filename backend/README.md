@@ -168,6 +168,9 @@ Response:
 }
 ```
 
+The sync endpoint stages the uploaded document into the RAG standards directory
+and starts the vector indexing workflow in a background task.
+
 ## Model IO
 
 The backend keeps model handoff files under `MODEL_IO_DIR`:
@@ -183,3 +186,7 @@ Environment variables:
 - `KNOWLEDGE_UPLOAD_DIR=knowledge_uploads`
 - `ALGORITHM_ENABLED=true`
 - `ALGORITHM_MODULE_DIR=`
+- `RAG_SERVICE_URL=http://algo_service:8001/api/ask`
+- `RAG_SERVICE_TIMEOUT_SECONDS=120`
+- `DASHSCOPE_API_KEY=`
+- `LLAMA_CLOUD_API_KEY=`

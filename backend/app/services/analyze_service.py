@@ -14,11 +14,7 @@ from ..models.health_profile import HealthProfile
 from ..models.scan_history import RiskLevel, ScanHistory, ScanStatus
 from ..models.user import User
 from .algorithm_client import AlgorithmUnavailable, analyze_food_image
-
-
-SUGAR_KEYWORDS = ["sugar", "sucrose", "glucose", "fructose", "糖", "蔗糖", "葡萄糖", "果糖"]
-SODIUM_KEYWORDS = ["sodium", "salt", "钠", "食盐", "盐"]
-FAT_KEYWORDS = ["fat", "trans fat", "脂肪", "反式脂肪"]
+from .rag_client import RagServiceError, analyze_with_rag
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -56,6 +52,7 @@ def _flatten(value: Any) -> list[str]:
 def _task_paths(task_id: str, suffix: str = ".bin") -> dict[str, Path]:
     return {
         "vision_input": settings.vision_input_dir / f"{task_id}{suffix}",
+        "vision_request": settings.vision_input_dir / f"{task_id}.request.json",
         "vision_output": settings.vision_output_dir / f"{task_id}.json",
         "rag_input": settings.rag_input_dir / f"{task_id}.json",
         "rag_output": settings.rag_output_dir / f"{task_id}.json",
@@ -116,48 +113,40 @@ def risk_level_code(risk_level: RiskLevel) -> str:
         return "HIGH"
     if risk_level == RiskLevel.medium:
         return "MEDIUM"
+    if risk_level == RiskLevel.unknown:
+        return "UNKNOWN"
     return "LOW"
 
 
-def _profile_has(values: list[str], keywords: set[str]) -> bool:
-    normalized = {value.strip().lower() for value in values if value}
-    return bool(normalized & keywords)
+def _risk_level_from_code(value: Any) -> RiskLevel:
+    normalized = str(value or "").strip().lower()
+    if normalized == "high":
+        return RiskLevel.high
+    if normalized == "medium":
+        return RiskLevel.medium
+    if normalized == "low":
+        return RiskLevel.low
+    return RiskLevel.unknown
 
 
-def _risk_from_text(text: str, user_profile: dict[str, list[str]]) -> tuple[RiskLevel, list[str]]:
-    normalized = text.lower()
-    warnings: list[str] = []
-
-    for allergen in user_profile["allergens"]:
-        if allergen and allergen.lower() in normalized:
-            warnings.append(f"检测到可能的过敏原：{allergen}")
-
-    disease_values = [disease.lower() for disease in user_profile["chronic_diseases"] if disease]
-    if _profile_has(disease_values, {"diabetes", "糖尿病", "2型糖尿病"}):
-        if any(keyword.lower() in normalized for keyword in SUGAR_KEYWORDS):
-            warnings.append("该食品可能含糖，糖尿病用户需关注摄入量。")
-
-    if _profile_has(disease_values, {"hypertension", "高血压"}):
-        if any(keyword.lower() in normalized for keyword in SODIUM_KEYWORDS):
-            warnings.append("该食品可能含钠或盐，高血压用户需关注钠摄入。")
-
-    if _profile_has(disease_values, {"hyperlipidemia", "高血脂"}):
-        if any(keyword.lower() in normalized for keyword in FAT_KEYWORDS):
-            warnings.append("该食品可能含脂肪，高血脂用户需关注脂肪摄入。")
-
-    if len(warnings) >= 2:
-        return RiskLevel.high, warnings
-    if warnings:
-        return RiskLevel.medium, warnings
-    return RiskLevel.low, warnings
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if item is not None]
 
 
-def _risk_suggestion(risk_level: RiskLevel) -> str:
-    if risk_level == RiskLevel.high:
-        return "建议暂缓食用，确认配料表和营养成分后再决定。"
-    if risk_level == RiskLevel.medium:
-        return "建议少量食用，并重点查看完整配料和营养成分表。"
-    return "当前分析未发现明显的个人健康风险。"
+def _warning_messages(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    messages: list[str] = []
+    for item in value:
+        if isinstance(item, dict):
+            message = item.get("message")
+            if message:
+                messages.append(str(message))
+        elif item is not None:
+            messages.append(str(item))
+    return messages
 
 
 def load_vision_output(task: ScanHistory) -> dict[str, Any]:
@@ -215,10 +204,30 @@ def create_scan_task(
     if source.resolve() != paths["vision_input"].resolve():
         shutil.move(str(source), paths["vision_input"])
 
+    profile = db.scalar(select(HealthProfile).where(HealthProfile.user_id == user.id))
+    vision_request = {
+        "schema_version": "1.0",
+        "task_id": task.task_id,
+        "image": {
+            "path": str(paths["vision_input"]),
+            "mime_type": None,
+            "original_filename": Path(image_path).name,
+        },
+        "user_context": {
+            "voice_query": question,
+            "profile": _profile_payload(profile),
+        },
+        "trace": {
+            "source": "fastapi",
+        },
+    }
+    _write_json(paths["vision_request"], vision_request)
+
     task.image_path = str(paths["vision_input"])
     task.raw_result = {
         "meta": {
             "vision_input_path": str(paths["vision_input"]),
+            "vision_request_path": str(paths["vision_request"]),
             "vision_output_path": str(paths["vision_output"]),
             "rag_input_path": str(paths["rag_input"]),
             "rag_output_path": str(paths["rag_output"]),
@@ -252,6 +261,7 @@ def _build_rag_input(
     meta.setdefault("rag_output_path", str(settings.rag_output_dir / f"{task.task_id}.json"))
     vision_meta = vision_result.get("meta") if isinstance(vision_result.get("meta"), dict) else {}
     return {
+        "schema_version": "1.0",
         "task_id": task.task_id,
         "vision": {
             **vision_result,
@@ -266,24 +276,14 @@ def _build_rag_input(
     }
 
 
-def _fallback_rag_payload(
-    *,
-    rag_input: dict[str, Any],
-    risk_level: RiskLevel,
-    warnings: list[str],
-) -> dict[str, Any]:
-    food_name = extract_food_name(rag_input) or "该食品"
-    ingredients = extract_ingredients(rag_input)
-    ingredients_text = "、".join(ingredients) if ingredients else "暂未识别到明确配料"
-    warning_text = " ".join(warnings) if warnings else _risk_suggestion(risk_level)
-    answer = (
-        f"{food_name}的识别配料包括：{ingredients_text}。"
-        f"综合用户健康档案，风险等级为{risk_level_code(risk_level)}。{warning_text}"
-    )
-    return {
-        "answer": answer,
-        "reference": ["rag_input", *warnings],
-    }
+def _raise_for_failed_rag(rag_output: dict[str, Any]) -> None:
+    if rag_output.get("status") != "failed":
+        return
+    error = rag_output.get("error")
+    if isinstance(error, dict):
+        message = error.get("message") or error.get("code") or "RAG service returned failed status"
+        raise RagServiceError(str(message))
+    raise RagServiceError("RAG service returned failed status")
 
 
 def run_development_analysis(task_id: str) -> None:
@@ -310,22 +310,20 @@ def run_development_analysis(task_id: str) -> None:
         _write_json(Path(rag_input["vision"]["meta"]["rag_input_path"]), rag_input)
         task.raw_result = rag_input
 
-        risk_level, warnings = _risk_from_text(
-            " ".join([task.question or "", *_flatten(rag_input)]),
-            user_profile,
-        )
-        rag_output = _fallback_rag_payload(
-            rag_input=rag_input,
-            risk_level=risk_level,
-            warnings=warnings,
-        )
+        rag_output = analyze_with_rag(rag_input)
         _write_json(Path(_metadata(task)["rag_output_path"]), rag_output)
+        _raise_for_failed_rag(rag_output)
+
+        suggestions = _string_list(rag_output.get("suggestions"))
+        health_advice = rag_output.get("health_advice")
+        if not suggestions and health_advice:
+            suggestions = [str(health_advice)]
 
         task.status = ScanStatus.completed
-        task.risk_level = risk_level
-        task.warnings = warnings
-        task.suggestions = [_risk_suggestion(risk_level)]
-        task.summary = rag_output["answer"]
+        task.risk_level = _risk_level_from_code(rag_output.get("risk_level"))
+        task.warnings = _warning_messages(rag_output.get("warnings"))
+        task.suggestions = suggestions
+        task.summary = str(rag_output.get("answer", ""))
         task.extracted_text = {
             "food_name": extract_food_name(rag_input),
             "ingredients": extract_ingredients(rag_input),
