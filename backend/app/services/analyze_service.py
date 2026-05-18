@@ -310,8 +310,8 @@ def run_development_analysis(task_id: str) -> None:
         _write_json(Path(rag_input["vision"]["meta"]["rag_input_path"]), rag_input)
         task.raw_result = rag_input
 
-        rag_output = analyze_with_rag(rag_input)
-        _write_json(Path(_metadata(task)["rag_output_path"]), rag_output)
+        analyze_with_rag(rag_input)  # 触发 RAG，retriever 写 rag_output 文件
+        rag_output = _read_json(_metadata(task)["rag_output_path"])
         _raise_for_failed_rag(rag_output)
 
         suggestions = _string_list(rag_output.get("suggestions"))
