@@ -6,6 +6,11 @@ class WechatLoginRequest(BaseModel):
     nickname: str | None = Field(default=None, max_length=64)
 
 
+class MockLoginRequest(BaseModel):
+    username: str = Field(default="dev_user", min_length=1, max_length=64)
+    nickname: str | None = Field(default="Mock User", max_length=64)
+
+
 class WechatLoginResponse(BaseModel):
     access_token: str
     is_new_user: bool

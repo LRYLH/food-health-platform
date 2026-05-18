@@ -62,3 +62,32 @@ def login_with_wechat_code(
     db.commit()
     db.refresh(user)
     return _issue_and_store_tokens(redis, user, is_new_user=is_new_user)
+
+
+def login_with_mock_user(
+    db: Session,
+    redis: Redis,
+    username: str = "dev_user",
+    nickname: str | None = "Mock User",
+) -> IssuedTokens:
+    safe_username = "".join(
+        char if char.isalnum() or char in ("_", "-") else "_"
+        for char in username.strip()
+    )[:64] or "dev_user"
+    mock_openid = f"mock_{safe_username}"
+    user = db.scalar(select(User).where(User.openid == mock_openid))
+    is_new_user = user is None
+    if user is None:
+        user = User(
+            email=None,
+            username=mock_openid,
+            openid=mock_openid,
+            nickname=nickname,
+        )
+        db.add(user)
+    elif nickname and not user.nickname:
+        user.nickname = nickname
+
+    db.commit()
+    db.refresh(user)
+    return _issue_and_store_tokens(redis, user, is_new_user=is_new_user)

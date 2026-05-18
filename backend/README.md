@@ -32,6 +32,23 @@ Response:
 }
 ```
 
+Development mock login is available outside production:
+
+```http
+POST /auth/mock-login
+Content-Type: application/json
+```
+
+```json
+{
+  "username": "dev_user",
+  "nickname": "Mock User"
+}
+```
+
+It returns the same response shape as WeChat login and can be used to test
+protected endpoints without a real WeChat code.
+
 Use the returned token on protected endpoints:
 
 ```http

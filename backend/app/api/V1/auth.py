@@ -2,10 +2,11 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from redis import Redis
 from sqlalchemy.orm import Session
 
+from ...core.config import settings
 from ...core.database import get_db
 from ...core.redis_client import get_redis
-from ...schemas.auth import WechatLoginRequest, WechatLoginResponse
-from ...services.auth_service import login_with_wechat_code
+from ...schemas.auth import MockLoginRequest, WechatLoginRequest, WechatLoginResponse
+from ...services.auth_service import login_with_mock_user, login_with_wechat_code
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -32,6 +33,30 @@ def wechat_login(
         request_payload.nickname,
     )
 
+    return WechatLoginResponse(
+        access_token=tokens.access_token,
+        is_new_user=tokens.is_new_user,
+    )
+
+
+@router.post("/mock-login", response_model=WechatLoginResponse, status_code=status.HTTP_200_OK)
+def mock_login(
+    payload: MockLoginRequest = Body(default_factory=MockLoginRequest),
+    db: Session = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> WechatLoginResponse:
+    if settings.environment == "production":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Mock login is disabled in production",
+        )
+
+    tokens = login_with_mock_user(
+        db=db,
+        redis=redis,
+        username=payload.username,
+        nickname=payload.nickname,
+    )
     return WechatLoginResponse(
         access_token=tokens.access_token,
         is_new_user=tokens.is_new_user,
