@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "backend_vision_request.schema.json",
+  "title": "BackendVisionRequest",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "task_id", "image"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mime_type": {
+          "type": "string"
+        },
+        "original_filename": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      }
+    },
+    "user_context": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "voice_query": {
+          "type": ["string", "null"]
+        },
+        "profile": {
+          "$ref": "#/$defs/UserProfile"
+        }
+      }
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "UserProfile": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "allergens": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "chronic_diseases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
+
