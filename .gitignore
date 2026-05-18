@@ -34,6 +34,7 @@ ENV/
 .coverage
 htmlcov/
 .mypy_cache/
+milvus-data/
 
 # 算法模型文件（体积巨大，建议通过脚本下载或挂载）
 *.pth
