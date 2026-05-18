@@ -48,6 +48,10 @@ class Settings(BaseSettings):
         return self.model_io_dir / "vision_output"
 
     @property
+    def rag_input_dir(self) -> Path:
+        return self.model_io_dir / "rag_input"
+
+    @property
     def rag_output_dir(self) -> Path:
         return self.model_io_dir / "rag_output"
 

@@ -19,10 +19,11 @@
 当前代码已经使用以下目录作为文件交接点：
 
 - `model_io/vision_input/{task_id}.*`：待视觉模型分析的食品包装图片。
-- `model_io/vision_output/{task_id}.json`：当前实现中写入的是 RAG 输入 JSON，即本文的 `RagAnalysisRequest`。
+- `model_io/vision_output/{task_id}.json`：视觉模型独立运行时写入的原始 `VisionResult`。
+- `model_io/rag_input/{task_id}.json`：后端把视觉模型输出和用户信息拼接后的 RAG 输入 JSON，即本文的 `RagAnalysisRequest`。
 - `model_io/rag_output/{task_id}.json`：RAG 最终输出 JSON，即本文的 `RagAnalysisResponse`。
 
-为了兼容现有实现，`model_io/vision_output/{task_id}.json` 暂不强制改名；如后续拆分更清晰，建议新增 `model_io/rag_input/{task_id}.json`。
+后端主服务不再把 RAG 输入写入 `vision_output`，该目录只保留给视觉模型原始输出。
 
 ## 2. 通用约定
 
@@ -77,7 +78,7 @@
 
 用途：视觉模型对食品包装图的结构化识别结果。该对象也会作为 `RagAnalysisRequest.vision` 原样传递给 RAG。
 
-推荐文件：`model_io/vision_result/{task_id}.json`；当前代码可直接作为内存返回值，由后端合并到 `model_io/vision_output/{task_id}.json`。
+推荐文件：`model_io/vision_output/{task_id}.json`；当前后端开发链路也可以直接把视觉结果作为内存返回值，再由后端合并到 `model_io/rag_input/{task_id}.json`。
 
 对应 Schema：`backend/docs/schemas/vision_result.schema.json`
 
@@ -153,7 +154,7 @@
 
 用途：后端把视觉结构化结果、用户健康档案和用户问题合并后传给 RAG。
 
-当前文件：`model_io/vision_output/{task_id}.json`
+当前文件：`model_io/rag_input/{task_id}.json`
 
 对应 Schema：`backend/docs/schemas/rag_analysis_request.schema.json`
 
@@ -207,6 +208,7 @@
   },
   "trace": {
     "vision_output_path": "model_io/vision_output/6f2b4c3d9f8142e6b2b0d6c9cf7d7f10.json",
+    "rag_input_path": "model_io/rag_input/6f2b4c3d9f8142e6b2b0d6c9cf7d7f10.json",
     "rag_output_path": "model_io/rag_output/6f2b4c3d9f8142e6b2b0d6c9cf7d7f10.json"
   }
 }
@@ -316,4 +318,3 @@ RAG 检索建议：
 - 删除字段、改变字段类型或改变必填字段时升主版本，例如 `2.0`。
 - 后端主服务负责在落库前做最小校验：`task_id` 一致、必填字段存在、`risk_level` 合法、`reference` 为字符串数组。
 - 视觉模型和 RAG 返回异常时，必须返回结构化 `error`，不能只返回纯文本。
-
