@@ -86,7 +86,7 @@ async function loadResult(taskId: string) {
       result.value = resp.result
       status.value = 'completed'
     } else if (resp.status === 'failed') {
-      errorMsg.value = resp.error
+      errorMsg.value = resp.error || '任务处理失败，请稍后重试'
       status.value = 'failed'
     }
   } catch (e) {

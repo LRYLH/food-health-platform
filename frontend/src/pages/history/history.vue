@@ -20,7 +20,7 @@
     <view v-else>
       <view v-for="r in records" :key="r.task_id" class="record-card">
         <view class="record-main">
-          <text class="food-name">{{ r.food_name }}</text>
+          <text class="food-name">{{ r.food_name || '未识别食品' }}</text>
           <text class="created-at">{{ formatTime(r.created_at) }}</text>
         </view>
         <view class="risk-badge" :class="`risk-${r.risk_level.toLowerCase()}`">

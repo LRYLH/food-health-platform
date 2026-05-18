@@ -29,7 +29,7 @@ export interface AnalyzeTaskResponse {
 export type TaskStatusResponse =
   | { status: 'processing' }
   | { status: 'completed'; result: AnalysisResult }
-  | { status: 'failed'; error: string }
+  | { status: 'failed'; error?: string }
 
 export interface HistoryRecord {
   task_id: string
