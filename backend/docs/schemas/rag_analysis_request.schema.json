@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rag_analysis_request.schema.json",
+  "title": "RagAnalysisRequest",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "task_id", "vision", "user_profile", "voice_query"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "voice_query": {
+      "type": ["string", "null"]
+    },
+    "user_profile": {
+      "$ref": "#/$defs/UserProfile"
+    },
+    "vision": {
+      "$ref": "vision_result.schema.json"
+    },
+    "retrieval": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "top_k": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "collections": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "required_topics": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "output_requirements": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "UserProfile": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["allergens", "chronic_diseases"],
+      "properties": {
+        "allergens": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "chronic_diseases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dietary_preferences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "age_group": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
+

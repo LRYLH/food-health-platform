@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rag_analysis_response.schema.json",
+  "title": "RagAnalysisResponse",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "task_id", "status", "risk_level", "answer", "reference"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["completed", "failed"]
+    },
+    "food_name": {
+      "type": "string"
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": ["LOW", "MEDIUM", "HIGH", "UNKNOWN"]
+    },
+    "answer": {
+      "type": "string"
+    },
+    "health_advice": {
+      "type": "string"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Warning"
+      }
+    },
+    "suggestions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reference": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Citation"
+      }
+    },
+    "confidence": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "overall": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "vision": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "retrieval": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "Warning": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["type", "level", "message"],
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "level": {
+          "type": "string",
+          "enum": ["LOW", "MEDIUM", "HIGH", "UNKNOWN"]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "Citation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["source_id"],
+      "properties": {
+        "source_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "chunk": {
+          "type": "string"
+        },
+        "score": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}
+
