@@ -1,5 +1,5 @@
 <template>
-  <view class="home">
+  <view class="home" :style="rootStyle">
     <view class="header">
       <text class="greeting">{{ greeting }}</text>
       <text class="welcome">来扫描一份食品吧</text>
@@ -36,6 +36,9 @@ import BottomNav from '@/components/BottomNav.vue'
 import { getHistory } from '@/api/history'
 import { getProfile } from '@/api/profile'
 import { submitAnalysis } from '@/api/tasks'
+import { useSettings } from '@/store/settings'
+
+const { rootStyle } = useSettings()
 
 const scanning = ref(false)
 const historyCount = ref(0)
@@ -108,13 +111,13 @@ onShow(() => {
 }
 
 .greeting {
-  font-size: 32rpx;
+  font-size: calc(32rpx * var(--font-scale, 1));
   color: #888;
   margin-bottom: 12rpx;
 }
 
 .welcome {
-  font-size: 48rpx;
+  font-size: calc(48rpx * var(--font-scale, 1));
   font-weight: 600;
   color: #1a1a1a;
 }
@@ -132,18 +135,18 @@ onShow(() => {
 }
 
 .cta-icon {
-  font-size: 80rpx;
+  font-size: calc(80rpx * var(--font-scale, 1));
   margin-bottom: 20rpx;
 }
 
 .cta-title {
-  font-size: 40rpx;
+  font-size: calc(40rpx * var(--font-scale, 1));
   font-weight: 600;
   margin-bottom: 12rpx;
 }
 
 .cta-sub {
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale, 1));
   opacity: 0.85;
   text-align: center;
   margin-bottom: 36rpx;
@@ -158,7 +161,7 @@ onShow(() => {
 }
 
 .cta-button-text {
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale, 1));
   color: #fff;
   font-weight: 500;
 }
@@ -180,14 +183,14 @@ onShow(() => {
 }
 
 .info-num {
-  font-size: 56rpx;
+  font-size: calc(56rpx * var(--font-scale, 1));
   font-weight: 600;
   color: #2e7d32;
   margin-bottom: 8rpx;
 }
 
 .info-label {
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale, 1));
   color: #888;
 }
 </style>

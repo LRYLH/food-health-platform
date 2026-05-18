@@ -1,5 +1,5 @@
 <template>
-  <view class="history-page">
+  <view class="history-page" :style="rootStyle">
     <view class="page-title">
       <text>历史扫描</text>
       <text class="page-subtitle">{{ total }} 条记录</text>
@@ -45,7 +45,10 @@ import { onShow } from '@dcloudio/uni-app'
 import { computed, ref } from 'vue'
 import BottomNav from '@/components/BottomNav.vue'
 import { getHistory } from '@/api/history'
+import { useSettings } from '@/store/settings'
 import type { HistoryRecord, RiskLevel } from '@/types/api'
+
+const { rootStyle } = useSettings()
 
 const PAGE_SIZE = 10
 
@@ -114,13 +117,13 @@ onShow(() => {
 }
 
 .page-title text:first-child {
-  font-size: 44rpx;
+  font-size: calc(44rpx * var(--font-scale, 1));
   font-weight: 600;
   color: #1a1a1a;
 }
 
 .page-subtitle {
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale, 1));
   color: #888;
   margin-top: 8rpx;
 }
@@ -154,13 +157,13 @@ onShow(() => {
 }
 
 .empty-icon {
-  font-size: 96rpx;
+  font-size: calc(96rpx * var(--font-scale, 1));
   color: #ccc;
   margin-bottom: 24rpx;
 }
 
 .empty-text {
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale, 1));
   color: #888;
   margin-bottom: 48rpx;
 }
@@ -170,7 +173,7 @@ onShow(() => {
   background: #4caf50;
   color: #fff;
   border-radius: 999rpx;
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale, 1));
 }
 
 .record-card {
@@ -190,13 +193,13 @@ onShow(() => {
 }
 
 .food-name {
-  font-size: 32rpx;
+  font-size: calc(32rpx * var(--font-scale, 1));
   color: #1a1a1a;
   margin-bottom: 8rpx;
 }
 
 .created-at {
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale, 1));
   color: #999;
 }
 
@@ -208,7 +211,7 @@ onShow(() => {
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale, 1));
   font-weight: 600;
 }
 
@@ -229,6 +232,6 @@ onShow(() => {
   text-align: center;
   padding: 32rpx;
   color: #999;
-  font-size: 26rpx;
+  font-size: calc(26rpx * var(--font-scale, 1));
 }
 </style>

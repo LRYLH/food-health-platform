@@ -1,5 +1,5 @@
 <template>
-  <view class="bottom-nav">
+  <view class="bottom-nav" :style="rootStyle">
     <view
       v-for="item in items"
       :key="item.path"
@@ -14,12 +14,15 @@
 </template>
 
 <script setup lang="ts">
+import { useSettings } from '@/store/settings'
+
 interface NavItem {
   label: string
   path: string
 }
 
 const props = defineProps<{ current: string }>()
+const { rootStyle } = useSettings()
 
 const items: NavItem[] = [
   { label: '首页', path: '/pages/index/index' },
@@ -57,7 +60,7 @@ function navigate(path: string) {
 }
 
 .label {
-  font-size: 26rpx;
+  font-size: calc(26rpx * var(--font-scale, 1));
   color: #888;
 }
 
