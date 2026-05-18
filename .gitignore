@@ -46,6 +46,8 @@ milvus-data/
 backend/app/algorithm/models/
 backend/app/algorithm/data/hard_samples/
 backend/app/algorithm/data/samples/
+backend/app/algorithm/data/standards/
+backend/app/algorithm/data/parsed_mds/
 backend/uploads/
 
 # 模型 I/O 目录：忽略输入图片和输出结果，保留 .gitkeep

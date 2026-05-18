@@ -15,7 +15,8 @@ from llama_index.llms.dashscope import DashScope, DashScopeGenerationModels
 
 load_dotenv()
 
-# 全局变量，用于在 lifespan 中初始化
+
+
 retriever = None
 
 @asynccontextmanager
@@ -23,17 +24,19 @@ async def lifespan(app: FastAPI):
     global retriever
     print("正在初始化算法，请稍候...")
     if not os.getenv("DASHSCOPE_API_KEY"):
-        print("警告：未检测到 DASHSCOPE_API_KEY，通义千问大模型将无法调用！请检查 .env 文件。")
+        print("警告：未检测到 DASHSCOPE_API_KEY！请检查 .env 文件。")
         
     try:
-        # 1. 挂载模型
+
+
         Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-zh-v1.5")
         Settings.llm = DashScope(
             model_name=DashScopeGenerationModels.QWEN_MAX,
             api_key=os.getenv("DASHSCOPE_API_KEY", "missing_key") 
         )
 
-        # 2. 连接 Milvus
+
+
         milvus_uri = os.getenv("MILVUS_URI", "http://127.0.0.1:19530")
         vector_store = MilvusVectorStore(
             uri=milvus_uri,
@@ -43,19 +46,17 @@ async def lifespan(app: FastAPI):
 
         index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
         retriever = index.as_retriever(similarity_top_k=3)
-        print("算法引擎初始化完成！Milvus 和大模型已就绪。")
+        print("算法引擎初始化完成！文件读写通道已就绪。")
         
     except Exception as e:
-        print(f"❌ 算法引擎初始化失败 (请检查 Milvus 是否启动): {e}")
-        # 这里不抛出异常，允许 FastAPI 启动，但后续请求会报错，方便排查
+        print(f"算法引擎初始化失败 (请检查 Milvus): {e}")
         
-    yield  # 此时应用开始接收 HTTP 请求
-    
-    print("🛑 算法引擎已关闭。")
+    yield 
+    print("算法引擎已关闭。")
 
-# 将 lifespan 绑定到 app
-app = FastAPI(title="多模态 RAG 算法服务引擎 API", lifespan=lifespan)
+app = FastAPI(title="多模态 RAG 文件交互算法引擎", lifespan=lifespan)
 
+# 用于反序列化和校验本地 rag_input 文件的结构
 class RagAnalysisRequest(BaseModel):
     schema_version: str
     task_id: str
@@ -66,13 +67,36 @@ class RagAnalysisRequest(BaseModel):
     output_requirements: Optional[Dict[str, Any]] = None
     trace: Optional[Dict[str, Any]] = None
 
+# HTTP 请求现在只接收一个极其轻量的 task_id 作为触发信号
+class TaskTriggerRequest(BaseModel):
+    task_id: str
+
 @app.post("/api/ask")
-async def ask_question(request: RagAnalysisRequest):
-    # 拦截：如果 retriever 初始化失败，直接返回 500
+async def ask_question(trigger: TaskTriggerRequest):
     if retriever is None:
-        raise HTTPException(status_code=500, detail="算法大脑未准备就绪 (Milvus 连接失败或模型未加载)。请查看算法容器日志。")
+        raise HTTPException(status_code=500, detail="算法大脑未准备就绪。")
+        
+    task_id = trigger.task_id
+    
+    # 读取 rag_input，写入 rag_output
+    base_io_dir = "/app/model_io" if os.path.exists("/app/model_io") else "model_io"
+    input_file_path = os.path.join(base_io_dir, "rag_input", f"{task_id}.json")
+    output_dir = os.path.join(base_io_dir, "rag_output")
+    output_file_path = os.path.join(output_dir, f"{task_id}.json")
+    
+    os.makedirs(output_dir, exist_ok=True)
+
+    #  尝试读取后端写好的文件
+    if not os.path.exists(input_file_path):
+        raise HTTPException(status_code=404, detail=f"未找到输入文件: {input_file_path}")
         
     try:
+        with open(input_file_path, "r", encoding="utf-8") as f:
+            file_data = json.load(f)
+        
+        request = RagAnalysisRequest(**file_data)
+        
+        # 提取核心查询词进行检索
         search_query = request.voice_query or ""
         food_name = request.vision.get("food_name", "该食品")
         ingredients = request.vision.get("ingredients", {}).get("raw_text", "")
@@ -83,9 +107,21 @@ async def ask_question(request: RagAnalysisRequest):
         retrieved_nodes = retriever.retrieve(search_query)
         knowledge_base_str = "\n\n".join([node.node.text for node in retrieved_nodes])
 
+        # 动态计算真实的检索置信度 
+        node_scores = [node.score for node in retrieved_nodes if node.score is not None]
+
+
+        real_retrieval_score = sum(node_scores) / len(node_scores) if node_scores else 0.1
+
+
+        real_vision_score = request.vision.get("meta", {}).get("quality_score", 0.8)
+
+        real_overall_score = (real_retrieval_score + real_vision_score) / 2
+
         allergens = ", ".join(request.user_profile.get("allergens", [])) or "无"
         diseases = ", ".join(request.user_profile.get("chronic_diseases", [])) or "无"
 
+        # 组装 Prompt 调用大模型
         final_prompt = f"""
 你是一个严谨的食品安全与医学健康分析专家。请根据以下信息分析食品对用户的健康风险。
 
@@ -124,9 +160,10 @@ async def ask_question(request: RagAnalysisRequest):
             
         parsed_llm_json = json.loads(match.group(0))
 
-        return {
+        # 组装 RagAnalysisResponse
+        final_response = {
             "schema_version": "1.0",
-            "task_id": request.task_id,
+            "task_id": task_id,
             "status": "completed",
             "food_name": food_name,
             "risk_level": parsed_llm_json.get("risk_level", "UNKNOWN"),
@@ -137,21 +174,29 @@ async def ask_question(request: RagAnalysisRequest):
             "reference": [node.node.text[:200] + "..." for node in retrieved_nodes],
             "citations": [],
             "confidence": {
-                "overall": 0.8,
-                "vision": request.vision.get("meta", {}).get("quality_score", 0.8),
-                "retrieval": 0.85
+                "overall": round(real_overall_score, 4),
+                "vision": round(real_vision_score, 4),
+                "retrieval": round(real_retrieval_score, 4)
             },
             "meta": {
                 "rag_model": "qwen-max",
-                "retriever": "llamaindex+milvus",
+                "retriever": "llamaindex+milvus"
             }
         }
 
+        # 将结果写入 rag_output 文件夹
+        with open(output_file_path, "w", encoding="utf-8") as f:
+            json.dump(final_response, f, ensure_ascii=False, indent=2)
+
+        # 返回成功信号，后端接到 200 就会去读文件
+        return {"status": "completed", "task_id": task_id, "output_path": output_file_path}
+
     except Exception as e:
         print(f"RAG 处理失败: {e}")
-        return {
+        # 如果出错了，把错误信息写成 JSON 放进文件夹
+        error_response = {
             "schema_version": "1.0",
-            "task_id": getattr(request, "task_id", "unknown_task_id"),
+            "task_id": task_id,
             "status": "failed",
             "risk_level": "UNKNOWN",
             "answer": "",
@@ -161,6 +206,13 @@ async def ask_question(request: RagAnalysisRequest):
                 "message": str(e)
             }
         }
+        try:
+            with open(output_file_path, "w", encoding="utf-8") as f:
+                json.dump(error_response, f, ensure_ascii=False, indent=2)
+        except Exception as write_err:
+            print(f"写入错误文件失败: {write_err}")
+            
+        return error_response
 
 if __name__ == "__main__":
     import uvicorn
