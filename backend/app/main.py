@@ -18,6 +18,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     settings.vision_input_dir.mkdir(parents=True, exist_ok=True)
     settings.vision_output_dir.mkdir(parents=True, exist_ok=True)
+    settings.rag_input_dir.mkdir(parents=True, exist_ok=True)
     settings.rag_output_dir.mkdir(parents=True, exist_ok=True)
     settings.knowledge_upload_dir.mkdir(parents=True, exist_ok=True)
     yield

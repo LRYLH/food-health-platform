@@ -57,6 +57,7 @@ def _task_paths(task_id: str, suffix: str = ".bin") -> dict[str, Path]:
     return {
         "vision_input": settings.vision_input_dir / f"{task_id}{suffix}",
         "vision_output": settings.vision_output_dir / f"{task_id}.json",
+        "rag_input": settings.rag_input_dir / f"{task_id}.json",
         "rag_output": settings.rag_output_dir / f"{task_id}.json",
     }
 
@@ -163,6 +164,11 @@ def load_vision_output(task: ScanHistory) -> dict[str, Any]:
     return _read_json(_metadata(task).get("vision_output_path"))
 
 
+def load_rag_input(task: ScanHistory) -> dict[str, Any]:
+    meta = _metadata(task)
+    return _read_json(meta.get("rag_input_path")) or _read_json(meta.get("vision_output_path"))
+
+
 def load_rag_output(task: ScanHistory) -> dict[str, Any]:
     payload = _read_json(_metadata(task).get("rag_output_path"))
     if not payload:
@@ -214,6 +220,7 @@ def create_scan_task(
         "meta": {
             "vision_input_path": str(paths["vision_input"]),
             "vision_output_path": str(paths["vision_output"]),
+            "rag_input_path": str(paths["rag_input"]),
             "rag_output_path": str(paths["rag_output"]),
         }
     }
@@ -240,7 +247,9 @@ def _build_rag_input(
     user_profile: dict[str, list[str]],
     algorithm_error: str | None,
 ) -> dict[str, Any]:
-    meta = _metadata(task)
+    meta = {**_metadata(task)}
+    meta.setdefault("rag_input_path", str(settings.rag_input_dir / f"{task.task_id}.json"))
+    meta.setdefault("rag_output_path", str(settings.rag_output_dir / f"{task.task_id}.json"))
     vision_meta = vision_result.get("meta") if isinstance(vision_result.get("meta"), dict) else {}
     return {
         "task_id": task.task_id,
@@ -273,7 +282,7 @@ def _fallback_rag_payload(
     )
     return {
         "answer": answer,
-        "reference": ["vision_output", *warnings],
+        "reference": ["rag_input", *warnings],
     }
 
 
@@ -298,7 +307,7 @@ def run_development_analysis(task_id: str) -> None:
             user_profile=user_profile,
             algorithm_error=algorithm_error,
         )
-        _write_json(Path(_metadata(task)["vision_output_path"]), rag_input)
+        _write_json(Path(rag_input["vision"]["meta"]["rag_input_path"]), rag_input)
         task.raw_result = rag_input
 
         risk_level, warnings = _risk_from_text(

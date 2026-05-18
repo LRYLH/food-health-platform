@@ -173,7 +173,8 @@ Response:
 The backend keeps model handoff files under `MODEL_IO_DIR`:
 
 - `model_io/vision_input/{task_id}.*`: image consumed by the vision model
-- `model_io/vision_output/{task_id}.json`: RAG input JSON with `task_id`, `vision`, `user_profile`, and `voice_query`
+- `model_io/vision_output/{task_id}.json`: raw vision model JSON when the standalone vision worker writes files
+- `model_io/rag_input/{task_id}.json`: RAG input JSON with `task_id`, `vision`, `user_profile`, and `voice_query`
 - `model_io/rag_output/{task_id}.json`: final RAG JSON with `answer` and `reference`
 
 Environment variables:

@@ -9,7 +9,7 @@ from ...models.scan_history import ScanHistory
 from ...models.user import User
 from ...schemas.analyze import HistoryRecord, HistoryResponse
 from ...schemas.profile import UserProfilePayload, UserProfileResponse
-from ...services.analyze_service import extract_food_name, load_vision_output, risk_level_code
+from ...services.analyze_service import extract_food_name, load_rag_input, risk_level_code
 
 
 router = APIRouter(prefix="/users/me", tags=["users"])
@@ -66,7 +66,7 @@ def read_history(
     )
     records = []
     for task in db.scalars(statement).all():
-        vision_result = load_vision_output(task) or (task.raw_result or {})
+        vision_result = load_rag_input(task) or (task.raw_result or {})
         records.append(
             HistoryRecord(
                 task_id=task.task_id,
