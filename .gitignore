@@ -20,6 +20,7 @@ Thumbs.db
 backend/.env
 !backend/.env.example
 .claude
+memory/
 
 # ==========================================
 # 后端与算法 (Python - Backend & Algorithm)
