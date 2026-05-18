@@ -45,13 +45,15 @@ services:
         image: quay.io/coreos/etcd:v3.5.10
         container_name: food_health_etcd
         environment:
-            - ETCD_AUTO_COMPACTION_MODE=revision
-            - ETCD_AUTO_COMPACTION_RETENTION=1000
-            - ETCD_QUOTA_BACKEND_BYTES=4294967296
-            - ETCD_SNAPSHOT_COUNT=50000
+            ETCD_AUTO_COMPACTION_MODE: revision
+            ETCD_AUTO_COMPACTION_RETENTION: "1000"
+            ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+            ETCD_SNAPSHOT_COUNT: "50000"
         volumes:
             - ./milvus-data/etcd:/etcd
-        command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+        ports:
+            - "2379:2379"
+        command: etcd --advertise-client-urls=http://etcd:2379 --listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
         restart: always
 
     minio:
@@ -62,6 +64,9 @@ services:
             MINIO_SECRET_KEY: minioadmin
         volumes:
             - ./milvus-data/minio:/minio_data
+        ports:
+            - "9000:9000"
+            - "9001:9001"
         command: minio server /minio_data --console-address ":9001"
         restart: always
 
@@ -75,8 +80,14 @@ services:
         volumes:
             - ./milvus-data/milvus:/var/lib/milvus
         ports:
-            - "19530:19530" 
+            - "19530:19530"
         depends_on:
             - etcd
             - minio
         restart: always
+        deploy:
+            resources:
+                limits:
+                    memory: 4G
+                reservations:
+                    memory: 1G

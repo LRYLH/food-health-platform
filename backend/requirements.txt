@@ -14,12 +14,19 @@ python-multipart==0.0.20
 # ==========================================
 # Algorithm 视觉 + 推理引擎依赖
 # ==========================================
-torch==2.12.0
-torchvision==0.27.0
-transformers==5.8.1
-accelerate==1.13.0
-einops==0.8.2
 numpy==2.2.6
 opencv-python-headless==4.13.0.92
-pillow==12.2.0
-huggingface_hub==1.14.0
+requests==2.32.5
+
+# ==========================================
+# RAG 知识库与 LLM 对接依赖 
+# ==========================================
+llama-index
+llama-index-core
+pymilvus
+llama-index-vector-stores-milvus
+llama-parse
+nest-asyncio
+llama-index-embeddings-huggingface
+dashscope
+python-dotenv
