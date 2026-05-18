@@ -1,7 +1,8 @@
 import os
 import json
 import re
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -14,28 +15,46 @@ from llama_index.llms.dashscope import DashScope, DashScopeGenerationModels
 
 load_dotenv()
 
-app = FastAPI(title="多模态 RAG 算法服务引擎 API")
+# 全局变量，用于在 lifespan 中初始化
+retriever = None
 
-print("正在初始化算法大脑，请稍候...")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global retriever
+    print("正在初始化算法，请稍候...")
+    if not os.getenv("DASHSCOPE_API_KEY"):
+        print("警告：未检测到 DASHSCOPE_API_KEY，通义千问大模型将无法调用！请检查 .env 文件。")
+        
+    try:
+        # 1. 挂载模型
+        Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-zh-v1.5")
+        Settings.llm = DashScope(
+            model_name=DashScopeGenerationModels.QWEN_MAX,
+            api_key=os.getenv("DASHSCOPE_API_KEY", "missing_key") 
+        )
 
-Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-zh-v1.5")
-Settings.llm = DashScope(
-    model_name=DashScopeGenerationModels.QWEN_MAX,
-    api_key=os.getenv("DASHSCOPE_API_KEY")
-)
+        # 2. 连接 Milvus
+        milvus_uri = os.getenv("MILVUS_URI", "http://127.0.0.1:19530")
+        vector_store = MilvusVectorStore(
+            uri=milvus_uri,
+            collection_name="food_health_standards",
+            dim=512
+        )
 
-# 注意：如果在 Docker 环境中，此处会自动读取 .env 里的 http://milvus-standalone:19530
-milvus_uri = os.getenv("MILVUS_URI", "http://127.0.0.1:19530")
-vector_store = MilvusVectorStore(
-    uri=milvus_uri,
-    collection_name="food_health_standards",
-    dim=512
-)
+        index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
+        retriever = index.as_retriever(similarity_top_k=3)
+        print("算法引擎初始化完成！Milvus 和大模型已就绪。")
+        
+    except Exception as e:
+        print(f"❌ 算法引擎初始化失败 (请检查 Milvus 是否启动): {e}")
+        # 这里不抛出异常，允许 FastAPI 启动，但后续请求会报错，方便排查
+        
+    yield  # 此时应用开始接收 HTTP 请求
+    
+    print("🛑 算法引擎已关闭。")
 
-index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
-retriever = index.as_retriever(similarity_top_k=3)
-
-print("算法引擎初始化完成！")
+# 将 lifespan 绑定到 app
+app = FastAPI(title="多模态 RAG 算法服务引擎 API", lifespan=lifespan)
 
 class RagAnalysisRequest(BaseModel):
     schema_version: str
@@ -47,12 +66,13 @@ class RagAnalysisRequest(BaseModel):
     output_requirements: Optional[Dict[str, Any]] = None
     trace: Optional[Dict[str, Any]] = None
 
-# 这里直接使用契约规范路径（为了未来扩展，使用 tasks/analyze 为前缀也行，但先保留 /api/ask）
 @app.post("/api/ask")
 async def ask_question(request: RagAnalysisRequest):
+    # 拦截：如果 retriever 初始化失败，直接返回 500
+    if retriever is None:
+        raise HTTPException(status_code=500, detail="算法大脑未准备就绪 (Milvus 连接失败或模型未加载)。请查看算法容器日志。")
+        
     try:
-        # 1. 提取核心查询词用于向量检索
-        # 优先使用用户的语音提问，如果没有，则用食品名称+配料表作为检索词
         search_query = request.voice_query or ""
         food_name = request.vision.get("food_name", "该食品")
         ingredients = request.vision.get("ingredients", {}).get("raw_text", "")
@@ -60,15 +80,11 @@ async def ask_question(request: RagAnalysisRequest):
         if not search_query:
             search_query = f"{food_name} {ingredients}"
 
-        # 2. 检索国标与医学知识
         retrieved_nodes = retriever.retrieve(search_query)
         knowledge_base_str = "\n\n".join([node.node.text for node in retrieved_nodes])
 
-        # 3. 提取用户健康画像 (过敏史与慢性病)
         allergens = ", ".join(request.user_profile.get("allergens", [])) or "无"
         diseases = ", ".join(request.user_profile.get("chronic_diseases", [])) or "无"
-
-        
 
         final_prompt = f"""
 你是一个严谨的食品安全与医学健康分析专家。请根据以下信息分析食品对用户的健康风险。
@@ -99,19 +115,15 @@ async def ask_question(request: RagAnalysisRequest):
   "suggestions": ["建议一", "建议二"]
 }}
 """
-        
-        # 4. 调用大模型
         response = Settings.llm.complete(final_prompt)
         raw_text = str(response).strip()
 
-        # 5. 极其强健的 JSON 正则提取器（防止大模型乱加废话报错）
         match = re.search(r'\{.*\}', raw_text, re.DOTALL)
         if not match:
             raise ValueError(f"大模型未能输出有效的 JSON。原始输出：{raw_text}")
             
         parsed_llm_json = json.loads(match.group(0))
 
-        
         return {
             "schema_version": "1.0",
             "task_id": request.task_id,
@@ -122,8 +134,8 @@ async def ask_question(request: RagAnalysisRequest):
             "health_advice": parsed_llm_json.get("health_advice", ""),
             "warnings": parsed_llm_json.get("warnings", []),
             "suggestions": parsed_llm_json.get("suggestions", []),
-            "reference": [node.node.text[:200] + "..." for node in retrieved_nodes], # 简化版引用
-            "citations": [], # 如果需要精准引用，后续可在此扩展
+            "reference": [node.node.text[:200] + "..." for node in retrieved_nodes],
+            "citations": [],
             "confidence": {
                 "overall": 0.8,
                 "vision": request.vision.get("meta", {}).get("quality_score", 0.8),
@@ -136,7 +148,6 @@ async def ask_question(request: RagAnalysisRequest):
         }
 
     except Exception as e:
-        # 失败时严格按照契约返回 failed 格式
         print(f"RAG 处理失败: {e}")
         return {
             "schema_version": "1.0",
