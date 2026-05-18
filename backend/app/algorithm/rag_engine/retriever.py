@@ -188,8 +188,7 @@ async def ask_question(trigger: TaskTriggerRequest):
         with open(output_file_path, "w", encoding="utf-8") as f:
             json.dump(final_response, f, ensure_ascii=False, indent=2)
 
-        # 返回成功信号，后端接到 200 就会去读文件
-        return {"status": "completed", "task_id": task_id, "output_path": output_file_path}
+        return final_response
 
     except Exception as e:
         print(f"RAG 处理失败: {e}")
