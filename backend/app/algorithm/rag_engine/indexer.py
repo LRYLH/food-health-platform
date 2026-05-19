@@ -1,5 +1,5 @@
-os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 import os
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 import nest_asyncio
 from dotenv import load_dotenv
 

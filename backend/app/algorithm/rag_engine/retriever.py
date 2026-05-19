@@ -1,6 +1,6 @@
-os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 import asyncio
 import os
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 import json
 import re
 from typing import Optional, Dict, Any
