@@ -1,7 +1,8 @@
 import os
-os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 import nest_asyncio
 from dotenv import load_dotenv
+
+from modelscope import snapshot_download
 
 # LlamaIndex 核心组件
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
@@ -16,7 +17,7 @@ nest_asyncio.apply()
 def main():
     print("启动数据知识库构建流程...")
     
-    # 1. 加载 .env 文件中的环境变量
+    #  加载 .env 文件中的环境变量
     load_dotenv()
     # 获取当前脚本 indexer.py 所在目录 (rag_engine) 的上一级目录 (algorithm)
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -24,7 +25,7 @@ def main():
     # 精确指向 algorithm/data 下的文件夹
     standards_dir = os.path.join(base_dir, "data", "standards")
     hard_samples_dir = os.path.join(base_dir, "data", "hard_samples")
-    parsed_mds_dir = os.path.join(base_dir, "data", "parsed_mds") # 顺便创建个放 md 结果的文件夹
+    parsed_mds_dir = os.path.join(base_dir, "data", "parsed_mds") 
     
     # 自动创建所需目录（防崩溃护城河）
     os.makedirs(standards_dir, exist_ok=True)
@@ -38,23 +39,28 @@ def main():
     if not has_standards and not has_hard_samples:
         print(f"数据文件夹为空,请将 PDF 放入以下路径：\n{standards_dir}\n或\n{hard_samples_dir}")
         return
-    # =======================================================================
+    # 配置全局 Embedding 模型
+    print("正在通过国内高速通道加载 BGE 向量模型...")
+    local_model_path = snapshot_download(
+        'AI-ModelScope/bge-small-zh-v1.5', 
+        cache_dir='/tmp/local_models'
+    )
+    print(f"入库引擎已挂载本地模型: {local_model_path}")
     
-    # 2. 配置全局 Embedding 模型
-    print("正在加载 BGE 中文向量模型 (首次运行会自动下载)...")
-    Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-zh-v1.5")
+    # 让 LlamaIndex 直接读取纯本地路径
+    Settings.embed_model = HuggingFaceEmbedding(model_name=local_model_path)
     Settings.node_parser = SentenceSplitter(chunk_size=512, chunk_overlap=50)
 
     all_docs = []
 
-    # 3. 解析第一梯队：纯文本 PDF (standards)
+    # 解析第一梯队：纯文本 PDF (standards)
     if has_standards:
         print(f"正在解析纯文本规范 ({standards_dir})...")
         text_docs = SimpleDirectoryReader(standards_dir).load_data()
         print(f"纯文本解析完成，共获取 {len(text_docs)} 个文档片段。")
         all_docs.extend(text_docs)
 
-    # 4. 解析第二、三梯队：复杂表格 PDF (hard_samples)
+    # 解析第二、三梯队：复杂表格 PDF (hard_samples)
     if has_hard_samples:
         print(f"正在调用 LlamaParse 解析复杂表格数据 ({hard_samples_dir})...")
         parser = LlamaParse(
@@ -74,7 +80,7 @@ def main():
         print("没有读取到任何文档，程序退出。")
         return
 
-    # 5. 连接 Milvus 向量数据库并写入数据
+    # 连接 Milvus 向量数据库并写入数据
     milvus_uri = os.getenv("MILVUS_URI", "http://127.0.0.1:19530")
     print(f"正在连接 Milvus 数据库: {milvus_uri}")
     
@@ -82,10 +88,10 @@ def main():
         uri=milvus_uri,
         collection_name="food_health_standards",
         dim=512,
-        overwrite=True
+        overwrite=True # 每次跑脚本都会覆盖旧数据，保证库里只有最新鲜的切片
     )
 
-    # 6. 生成向量并存入数据库
+    # 生成向量并存入数据库
     print("正在进行文本切块、向量化计算，并写入 Milvus... 请耐心等待！")
     index = VectorStoreIndex.from_documents(
         all_docs,

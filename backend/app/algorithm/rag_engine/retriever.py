@@ -1,6 +1,5 @@
 import asyncio
 import os
-os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 import json
 import re
 from typing import Optional, Dict, Any
@@ -8,6 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from modelscope import snapshot_download
 
 # LlamaIndex 核心组件
 from llama_index.core import VectorStoreIndex, Settings
@@ -18,8 +18,6 @@ from http import HTTPStatus
 
 load_dotenv()
 QWEN_MAX_MODEL = "qwen-max"
-
-
 
 retriever = None
 
@@ -35,8 +33,13 @@ async def lifespan(app: FastAPI):
 
     for attempt in range(1, max_retries + 1):
         try:
-            Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-zh-v1.5")
-
+            print("准备拉取 BGE 模型...")
+            local_model_path = snapshot_download(
+                'AI-ModelScope/bge-small-zh-v1.5', 
+                cache_dir='/tmp/local_models'
+            )
+            print(f"模型下载成功，位置: {local_model_path}")
+            Settings.embed_model = HuggingFaceEmbedding(model_name=local_model_path)
             milvus_uri = os.getenv("MILVUS_URI", "http://127.0.0.1:19530")
             vector_store = MilvusVectorStore(
                 uri=milvus_uri,
@@ -115,9 +118,7 @@ async def ask_question(trigger: TaskTriggerRequest):
         # 动态计算真实的检索置信度 
         node_scores = [node.score for node in retrieved_nodes if node.score is not None]
 
-
         real_retrieval_score = sum(node_scores) / len(node_scores) if node_scores else 0.1
-
 
         real_vision_score = request.vision.get("meta", {}).get("quality_score", 0.8)
 

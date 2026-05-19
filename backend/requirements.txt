@@ -30,3 +30,4 @@ nest-asyncio==1.6.0
 llama-index-embeddings-huggingface==0.7.0
 dashscope==1.25.18
 python-dotenv==1.2.2
+modelscope
