@@ -1,3 +1,4 @@
+import asyncio
 import os
 import json
 import re
@@ -27,29 +28,34 @@ async def lifespan(app: FastAPI):
     print("正在初始化算法，请稍候...")
     if not os.getenv("DASHSCOPE_API_KEY"):
         print("警告：未检测到 DASHSCOPE_API_KEY！请检查 .env 文件。")
-        
-    try:
 
+    max_retries = 5
+    retry_delay = 3
 
-        Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-zh-v1.5")
+    for attempt in range(1, max_retries + 1):
+        try:
+            Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-zh-v1.5")
 
+            milvus_uri = os.getenv("MILVUS_URI", "http://127.0.0.1:19530")
+            vector_store = MilvusVectorStore(
+                uri=milvus_uri,
+                collection_name="food_health_standards",
+                dim=512
+            )
 
+            index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
+            retriever = index.as_retriever(similarity_top_k=3)
+            print("算法引擎初始化完成！文件读写通道已就绪。")
+            break
+        except Exception as e:
+            print(f"算法引擎初始化失败 (第 {attempt}/{max_retries} 次): {e}")
+            if attempt < max_retries:
+                print(f"将在 {retry_delay} 秒后重试...")
+                await asyncio.sleep(retry_delay)
+            else:
+                print("已达到最大重试次数，算法引擎将不可用。")
 
-        milvus_uri = os.getenv("MILVUS_URI", "http://127.0.0.1:19530")
-        vector_store = MilvusVectorStore(
-            uri=milvus_uri,
-            collection_name="food_health_standards",
-            dim=512
-        )
-
-        index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
-        retriever = index.as_retriever(similarity_top_k=3)
-        print("算法引擎初始化完成！文件读写通道已就绪。")
-        
-    except Exception as e:
-        print(f"算法引擎初始化失败 (请检查 Milvus): {e}")
-        
-    yield 
+    yield
     print("算法引擎已关闭。")
 
 app = FastAPI(title="多模态 RAG 文件交互算法引擎", lifespan=lifespan)
