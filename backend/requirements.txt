@@ -21,12 +21,12 @@ requests==2.32.5
 # ==========================================
 # RAG 知识库与 LLM 对接依赖 
 # ==========================================
-llama-index
-llama-index-core
-pymilvus
-llama-index-vector-stores-milvus
-llama-parse
-nest-asyncio
-llama-index-embeddings-huggingface
-dashscope
-python-dotenv
+llama-index==0.14.22
+llama-index-core==0.14.22
+pymilvus==2.6.14
+llama-index-vector-stores-milvus==1.1.0
+llama-parse==0.6.94
+nest-asyncio==1.6.0
+llama-index-embeddings-huggingface==0.7.0
+dashscope==1.25.18
+python-dotenv==1.2.2
