@@ -63,7 +63,8 @@ services:
         env_file:
             - .env
         depends_on:
-            - milvus
+            milvus:
+                condition: service_healthy
         volumes:
 
             - ./app:/app/app
@@ -117,6 +118,12 @@ services:
             - etcd
             - minio
         restart: always
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+            interval: 5s
+            timeout: 3s
+            retries: 10
+            start_period: 30s
         deploy:
             resources:
                 limits:
