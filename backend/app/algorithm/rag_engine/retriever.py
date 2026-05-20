@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from modelscope import snapshot_download
-
+from pymilvus import Collection, connections
 # LlamaIndex 核心组件
 from llama_index.core import VectorStoreIndex, Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -27,6 +27,17 @@ async def lifespan(app: FastAPI):
     print("正在初始化算法，请稍候...")
     if not os.getenv("DASHSCOPE_API_KEY"):
         print("警告：未检测到 DASHSCOPE_API_KEY！请检查 .env 文件。")
+    milvus_uri = os.getenv("MILVUS_URI", "http://milvus:19530")
+    print(f"DEBUG: 正在尝试连接 Milvus: {milvus_uri}")
+    
+    # 显式连接并检查
+    try:
+        connections.connect(uri=milvus_uri)
+        collection = Collection("food_health_standards")
+        collection.load()
+        print(f"DEBUG: 成功加载集合，当前记录数: {collection.num_entities}")
+    except Exception as e:
+        print(f"DEBUG: 警告！无法加载集合 (如果这是第一次启动则忽略): {e}")
 
     max_retries = 5
     retry_delay = 3

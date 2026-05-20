@@ -1,11 +1,11 @@
 import os
 import nest_asyncio
 from dotenv import load_dotenv
-
+from pymilvus import MilvusClient
 from modelscope import snapshot_download
 
 # LlamaIndex 核心组件
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Settings, StorageContext
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.milvus import MilvusVectorStore
@@ -92,12 +92,25 @@ def main():
     )
 
     # 生成向量并存入数据库
-    print("正在进行文本切块、向量化计算，并写入 Milvus... 请耐心等待！")
-    index = VectorStoreIndex.from_documents(
-        all_docs,
-        vector_store=vector_store,
+    print(f"正在配置存储上下文...")
+    storage_context = StorageContext.from_defaults(vector_store=vector_store)
+    print(f"开始写入 {len(all_docs)} 个文档片段...")
+    # 把 storage_context 传进去，而不是 vector_store
+    VectorStoreIndex.from_documents(
+        all_docs, 
+        storage_context=storage_context, 
         show_progress=True
     )
+    print("写入完毕，正在强制落盘 (Flush)...")
+    try:
+        client = MilvusClient(uri=milvus_uri)
+        client.flush(collection_name="food_health_standards")
+        client.load_collection(collection_name="food_health_standards")
+        
+        stats = client.get_collection_stats(collection_name="food_health_standards")
+        print(f"【入库最终校验】成功！当前数据库状态: {stats}")
+    except Exception as e:
+        print(f"入库最终校验失败: {e}")
 
     print("所有国标数据已成功注入向量！")
 
